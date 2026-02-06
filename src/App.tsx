@@ -7,7 +7,16 @@ import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import Auth from "./pages/Auth";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 10000, // Data is fresh for 10 seconds
+      gcTime: 300000, // Cache for 5 minutes
+      refetchOnWindowFocus: false, // Don't refetch on tab focus (we handle this manually)
+      retry: 1, // Only retry once on failure
+    },
+  },
+});
 
 const App = () => (
   <QueryClientProvider client={queryClient}>

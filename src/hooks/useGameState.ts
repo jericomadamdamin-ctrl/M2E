@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchGameState, gameAction } from '@/lib/backend';
 import { clearSession, getSession } from '@/lib/session';
 import { GameConfig, Machine, PlayerState, GameStateResponse, MachineType, MineralType } from '@/types/game';
@@ -44,6 +44,10 @@ export const useGameState = () => {
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
 
+  // Prevent concurrent fetches
+  const isFetchingRef = useRef(false);
+  const initialFetchDoneRef = useRef(false);
+
   const handleAuthFailure = (message: string) => {
     if (/session expired|invalid session token|missing authorization/i.test(message)) {
       clearSession();
@@ -53,15 +57,21 @@ export const useGameState = () => {
     return false;
   };
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
+  const refresh = useCallback(async (showLoading = false) => {
+    // Prevent concurrent refreshes
+    if (isFetchingRef.current) return;
+
+    const session = getSession();
+    if (!session) {
+      setLoading(false);
+      return;
+    }
+
+    isFetchingRef.current = true;
+    if (showLoading) setLoading(true);
     setError(null);
+
     try {
-      const session = getSession();
-      if (!session) {
-        setLoading(false);
-        return;
-      }
       const response = await fetchGameState();
       const mapped = mapState(response);
       setConfig(mapped.config);
@@ -80,45 +90,39 @@ export const useGameState = () => {
         setError(message);
       }
     } finally {
+      isFetchingRef.current = false;
       setLoading(false);
     }
   }, []);
 
+  // Initial fetch only - runs once
   useEffect(() => {
-    refresh();
+    if (!initialFetchDoneRef.current) {
+      initialFetchDoneRef.current = true;
+      refresh(true);
+    }
   }, [refresh]);
 
+  // Single polling effect with visibility-aware interval
   useEffect(() => {
-    // Session changes are handled by consumers (Auth/Index) via localStorage.
-    const interval = setInterval(() => {
-      const session = getSession();
-      if (!session) {
-        setPlayer({ oilBalance: 0, diamondBalance: 0, minerals: defaultMinerals });
-        setMachines([]);
-      }
-    }, 2000);
-    return () => clearInterval(interval);
-  }, [refresh]);
-
-  useEffect(() => {
-    let intervalId: NodeJS.Timeout;
+    let intervalId: ReturnType<typeof setInterval>;
 
     const startPolling = () => {
       if (intervalId) clearInterval(intervalId);
 
-      // Poll faster (5s) when visible, slower (30s) when hidden
+      // Poll every 10s when visible, 60s when hidden (reduced from 5s/30s)
       const isVisible = document.visibilityState === 'visible';
-      const delay = isVisible ? 5000 : 30000;
+      const delay = isVisible ? 10000 : 60000;
 
       intervalId = setInterval(() => {
-        refresh();
+        refresh(false); // Don't show loading spinner for background refreshes
       }, delay);
     };
 
     const handleVisibilityChange = () => {
       startPolling();
       if (document.visibilityState === 'visible') {
-        refresh(); // Immediate refresh when returning to tab
+        refresh(false); // Immediate refresh when returning to tab
       }
     };
 
@@ -159,7 +163,6 @@ export const useGameState = () => {
       if (handleAuthFailure(message)) {
         return;
       }
-      // Use toast for action errors instead of global state
       toast({
         title: 'Action Failed',
         description: message,
@@ -182,7 +185,7 @@ export const useGameState = () => {
     loading,
     error,
     profile,
-    refresh,
+    refresh: () => refresh(true),
     buyMachine,
     fuelMachine,
     startMachine,
