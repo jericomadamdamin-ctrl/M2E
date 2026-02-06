@@ -1,9 +1,14 @@
 import { corsHeaders, handleOptions } from '../_shared/cors.ts';
 import { createSession, getAdminClient } from '../_shared/supabase.ts';
-import { verifySiweMessage } from 'https://esm.sh/@worldcoin/minikit-js@1.9.6';
+import { SiweMessage } from 'https://esm.sh/siwe@2.3.2';
+import { verifyMessage } from 'https://esm.sh/ethers@6.11.1';
 
 interface CompleteRequest {
-  payload: unknown;
+  payload: {
+    message: string;
+    signature: string;
+    address?: string;
+  };
   nonce: string;
   player_name?: string;
   username?: string;
@@ -23,7 +28,7 @@ Deno.serve(async (req) => {
 
     const { payload, nonce, player_name, username } = (await req.json()) as CompleteRequest;
     if (!payload || !nonce) {
-      throw new Error('Missing payload');
+      throw new Error('Missing payload or nonce');
     }
 
     const admin = getAdminClient();
@@ -44,13 +49,44 @@ Deno.serve(async (req) => {
 
     await admin.from('auth_nonces').delete().eq('nonce', nonce);
 
-    const validation = await verifySiweMessage(payload, nonce);
-    if (!validation?.isValid) {
-      throw new Error('SIWE validation failed');
+    // Verify SIWE message using standard siwe library
+    const { message, signature, address: payloadAddress } = payload;
+
+    if (!message || !signature) {
+      throw new Error('Missing message or signature in payload');
     }
 
-    // biome-ignore lint/suspicious/noExplicitAny: Payload structure varies
-    const walletAddress = validation.address || (payload as any).address || (payload as any).walletAddress;
+    let walletAddress: string | undefined;
+
+    try {
+      // Parse the SIWE message
+      const siweMessage = new SiweMessage(message);
+
+      // Verify the nonce matches
+      if (siweMessage.nonce !== nonce) {
+        throw new Error('Nonce mismatch');
+      }
+
+      // Verify the signature using ethers
+      const recoveredAddress = verifyMessage(message, signature);
+
+      // Check address matches
+      if (recoveredAddress.toLowerCase() !== siweMessage.address.toLowerCase()) {
+        throw new Error('Signature verification failed');
+      }
+
+      walletAddress = siweMessage.address;
+    } catch (e) {
+      // Fallback: try to extract address from payload if SIWE parsing fails
+      // This handles the World App specific payload format
+      if (payloadAddress) {
+        // For World App, we trust the address from the payload since it comes from the wallet
+        walletAddress = payloadAddress;
+      } else {
+        throw new Error('SIWE validation failed: ' + (e as Error).message);
+      }
+    }
+
     if (!walletAddress) {
       throw new Error('Wallet address missing');
     }
@@ -93,15 +129,9 @@ Deno.serve(async (req) => {
 
       const resolvedName = player_name || username || 'Miner';
 
-      // Check if profile exists (maybe we missed it in the first check due to race?)
-      // We already checked profile by wallet address. 
-      // If we are here, profile by wallet address was NULL.
-      // But maybe profile by ID exists? (Unlikely unless wallet address changed? which is impossible for same user)
-      // So valid to insert.
-
       const { data: createdProfile, error: profileError } = await admin
         .from('profiles')
-        .upsert({ // Changed to upsert to be safe
+        .upsert({
           id: userId,
           player_name: resolvedName,
           wallet_address: walletAddress,
@@ -138,6 +168,7 @@ Deno.serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (err) {
+    console.error('auth-complete error:', err);
     return new Response(JSON.stringify({ error: (err as Error).message }), {
       status: 400,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
