@@ -52,7 +52,7 @@ export const HumanGate = ({ onVerified }: HumanGateProps) => {
       }
 
       const { error } = await supabase.functions.invoke('worldid-verify', {
-        headers: { Authorization: `Bearer ${getSessionToken()}` },
+        headers: { 'x-app-session': getSessionToken() ?? '' },
         body: { payload: finalPayload as ISuccessResult, action, signal },
       });
 

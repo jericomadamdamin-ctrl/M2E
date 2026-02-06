@@ -3,17 +3,33 @@ import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_PUBLISHABLE_KEY =
-  import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
-  import.meta.env.VITE_SUPABASE_ANON_KEY;
+const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+const SUPABASE_CLIENT_KEY = SUPABASE_PUBLISHABLE_KEY || SUPABASE_ANON_KEY;
+
+if (!SUPABASE_CLIENT_KEY) {
+  throw new Error('Missing VITE_SUPABASE_PUBLISHABLE_KEY (or VITE_SUPABASE_ANON_KEY)');
+}
+
+// If you use a `sb_publishable_...` key, Edge Functions can still require a JWT in the
+// `Authorization` header. Provide the legacy anon JWT (if available) as an access token.
+const HAS_JWT_ANON_KEY = Boolean(SUPABASE_ANON_KEY?.split('.').length === 3);
+const SHOULD_USE_ACCESS_TOKEN = Boolean(SUPABASE_PUBLISHABLE_KEY && HAS_JWT_ANON_KEY);
 
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
-export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_CLIENT_KEY, {
+  ...(SHOULD_USE_ACCESS_TOKEN
+    ? {
+        accessToken: async () => SUPABASE_ANON_KEY!,
+      }
+    : {}),
+  // We use custom app sessions instead of Supabase Auth sessions.
   auth: {
-    storage: localStorage,
-    persistSession: true,
-    autoRefreshToken: true,
-  }
+    persistSession: false,
+    autoRefreshToken: false,
+    detectSessionInUrl: false,
+  },
 });

@@ -24,7 +24,7 @@ describe('backend.ts', () => {
         it('returns correct headers with token', () => {
             const headers = authHeaders();
             expect(headers).toEqual({
-                Authorization: 'Bearer mock-token',
+                'x-app-session': 'mock-token',
             });
         });
     });

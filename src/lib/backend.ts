@@ -4,7 +4,9 @@ import { getSessionToken } from '@/lib/session';
 
 export const authHeaders = () => {
   const token = getSessionToken();
-  return token ? { Authorization: `Bearer ${token}` } : {};
+  // Do not override `Authorization` because Supabase Edge Functions may require a valid
+  // Supabase JWT there. We send our app session token in a separate header.
+  return token ? { 'x-app-session': token } : {};
 };
 
 export async function fetchGameState(): Promise<GameStateResponse> {
@@ -64,9 +66,15 @@ async function handleFunctionError(error: any) {
   if (error && typeof error === 'object' && 'context' in error) {
     // Attempt to parse the response body from the error context
     try {
-      const body = await error.context.json();
-      if (body && typeof body === 'object' && 'error' in body) {
-        throw new Error(body.error);
+      const ctx: Response = error.context;
+      const json = await ctx.clone().json().catch(() => null);
+      if (json && typeof json === 'object' && 'error' in json) {
+        throw new Error((json as any).error);
+      }
+
+      const text = await ctx.clone().text().catch(() => '');
+      if (text) {
+        throw new Error(text);
       }
     } catch {
       // ignore parse error types

@@ -26,13 +26,20 @@ export function getUserClient(authHeader: string | null) {
 }
 
 export async function requireUserId(req: Request): Promise<string> {
+  const tokenFromHeader = req.headers.get('x-app-session')?.trim();
   const authHeader = req.headers.get('Authorization');
-  if (!authHeader) {
-    throw new Error('Missing Authorization header');
-  }
-  const token = authHeader.replace('Bearer', '').trim();
+  const tokenFromAuth = authHeader?.toLowerCase().startsWith('bearer ')
+    ? authHeader.slice('bearer '.length).trim()
+    : null;
+
+  // Prefer our dedicated header. If a legacy client sends the session token in
+  // `Authorization`, accept it only when it doesn't look like a JWT.
+  const token =
+    tokenFromHeader ||
+    (tokenFromAuth && !tokenFromAuth.includes('.') ? tokenFromAuth : null);
+
   if (!token) {
-    throw new Error('Invalid session token');
+    throw new Error('Missing app session token');
   }
 
   const admin = getAdminClient();
