@@ -62,25 +62,34 @@ export async function getAuthNonce() {
 }
 
 // Helper to extract error message from Edge Function response
-async function handleFunctionError(error: any) {
-  if (error && typeof error === 'object' && 'context' in error) {
-    // Attempt to parse the response body from the error context
-    try {
-      const ctx: Response = error.context;
-      const json = await ctx.clone().json().catch(() => null);
-      if (json && typeof json === 'object' && 'error' in json) {
-        throw new Error((json as any).error);
-      }
+async function handleFunctionError(error: any): Promise<never> {
+  let message = 'Request to edge function failed';
 
-      const text = await ctx.clone().text().catch(() => '');
-      if (text) {
-        throw new Error(text);
+  if (error && typeof error === 'object') {
+    // Check if there's a context Response we can parse
+    if ('context' in error && error.context instanceof Response) {
+      try {
+        const ctx: Response = error.context;
+        const json = await ctx.clone().json().catch(() => null);
+        if (json && typeof json === 'object' && 'error' in json) {
+          message = (json as any).error;
+        } else {
+          const text = await ctx.clone().text().catch(() => '');
+          if (text) {
+            message = text;
+          }
+        }
+      } catch {
+        // ignore parse errors
       }
-    } catch {
-      // ignore parse error types
+    } else if ('message' in error && typeof error.message === 'string') {
+      message = error.message;
     }
+  } else if (typeof error === 'string') {
+    message = error;
   }
-  throw error;
+
+  throw new Error(message);
 }
 
 export async function completeWalletAuth(payload: unknown, nonce: string, playerName?: string, username?: string) {

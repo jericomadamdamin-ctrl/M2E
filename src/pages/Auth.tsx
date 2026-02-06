@@ -89,6 +89,7 @@ const Auth = () => {
         navigate('/');
       }
     } catch (error) {
+      console.error('Auth error:', error);
       toast({
         title: 'Sign In Failed',
         description: getErrorMessage(error),
