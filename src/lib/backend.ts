@@ -59,11 +59,27 @@ export async function getAuthNonce() {
   return data as { nonce: string };
 }
 
+// Helper to extract error message from Edge Function response
+async function handleFunctionError(error: any) {
+  if (error && typeof error === 'object' && 'context' in error) {
+    // Attempt to parse the response body from the error context
+    try {
+      const body = await error.context.json();
+      if (body && typeof body === 'object' && 'error' in body) {
+        throw new Error(body.error);
+      }
+    } catch {
+      // ignore parse error types
+    }
+  }
+  throw error;
+}
+
 export async function completeWalletAuth(payload: unknown, nonce: string, playerName?: string, username?: string) {
   const { data, error } = await supabase.functions.invoke('auth-complete', {
     body: { payload, nonce, player_name: playerName, username },
   });
-  if (error) throw error;
+  if (error) await handleFunctionError(error);
   return data as {
     session: {
       token: string;
