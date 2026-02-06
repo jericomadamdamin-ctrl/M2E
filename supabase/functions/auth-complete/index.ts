@@ -49,7 +49,8 @@ Deno.serve(async (req) => {
       throw new Error('SIWE validation failed');
     }
 
-    const walletAddress = validation.address || payload.address || payload.walletAddress;
+    // biome-ignore lint/suspicious/noExplicitAny: Payload structure varies
+    const walletAddress = validation.address || (payload as any).address || (payload as any).walletAddress;
     if (!walletAddress) {
       throw new Error('Wallet address missing');
     }
@@ -66,23 +67,41 @@ Deno.serve(async (req) => {
       const email = `wallet_${walletAddress.toLowerCase()}@world.local`;
       const password = crypto.randomUUID() + crypto.randomUUID();
 
+      let userIdFromAuth = '';
+
       const { data: authUser, error: authError } = await admin.auth.admin.createUser({
         email,
         password,
         email_confirm: true,
       });
 
-      if (authError || !authUser?.user?.id) {
-        throw new Error('Failed to create auth user');
+      if (authError) {
+        // Check if user already exists
+        const { data: users } = await admin.auth.admin.listUsers();
+        // biome-ignore lint/suspicious/noExplicitAny: User type definition
+        const existingUser = users.users.find((u: any) => u.email === email);
+        if (existingUser) {
+          userIdFromAuth = existingUser.id;
+        } else {
+          throw new Error('Failed to create auth user: ' + authError.message);
+        }
+      } else {
+        userIdFromAuth = authUser.user.id;
       }
 
-      userId = authUser.user.id;
+      userId = userIdFromAuth;
 
       const resolvedName = player_name || username || 'Miner';
 
+      // Check if profile exists (maybe we missed it in the first check due to race?)
+      // We already checked profile by wallet address. 
+      // If we are here, profile by wallet address was NULL.
+      // But maybe profile by ID exists? (Unlikely unless wallet address changed? which is impossible for same user)
+      // So valid to insert.
+
       const { data: createdProfile, error: profileError } = await admin
         .from('profiles')
-        .insert({
+        .upsert({ // Changed to upsert to be safe
           id: userId,
           player_name: resolvedName,
           wallet_address: walletAddress,
@@ -101,6 +120,8 @@ Deno.serve(async (req) => {
         .update({ player_name })
         .eq('id', userId);
     }
+
+    if (!userId) throw new Error('User ID not resolved');
 
     const session = await createSession(userId);
 

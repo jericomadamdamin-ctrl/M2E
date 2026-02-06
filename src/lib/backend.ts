@@ -74,3 +74,16 @@ export async function completeWalletAuth(payload: unknown, nonce: string, player
     };
   };
 }
+
+export async function updateProfile(updates: { playerName?: string }) {
+  const session = await supabase.auth.getSession();
+  if (!session.data.session) throw new Error('Not authenticated');
+
+  const { error } = await supabase
+    .from('profiles')
+    .update({ player_name: updates.playerName })
+    .eq('id', session.data.session.user.id);
+
+  if (error) throw error;
+  return { success: true };
+}
