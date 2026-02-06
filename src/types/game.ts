@@ -53,6 +53,7 @@ export interface GameConfig {
   };
   treasury: {
     payout_percentage: number;
+    treasury_address?: string | null;
   };
   player_messaging_rules: {
     no_fixed_roi_promises: boolean;

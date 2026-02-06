@@ -91,15 +91,36 @@ export async function completeWalletAuth(payload: unknown, nonce: string, player
   };
 }
 
+export async function initiateOilPurchase(token: 'WLD' | 'USDC', oilAmount: number) {
+  const { data, error } = await supabase.functions.invoke('oil-purchase-initiate', {
+    headers: authHeaders(),
+    body: { token, oil_amount: oilAmount },
+  });
+  if (error) await handleFunctionError(error);
+  return data as {
+    reference: string;
+    token: 'WLD' | 'USDC';
+    amount_token: number;
+    amount_oil: number;
+    to_address: string;
+    description: string;
+  };
+}
+
+export async function confirmOilPurchase(payload: unknown) {
+  const { data, error } = await supabase.functions.invoke('oil-purchase-confirm', {
+    headers: authHeaders(),
+    body: { payload },
+  });
+  if (error) await handleFunctionError(error);
+  return data as { status: string; oil_balance?: number };
+}
+
 export async function updateProfile(updates: { playerName?: string }) {
-  const session = await supabase.auth.getSession();
-  if (!session.data.session) throw new Error('Not authenticated');
-
-  const { error } = await supabase
-    .from('profiles')
-    .update({ player_name: updates.playerName })
-    .eq('id', session.data.session.user.id);
-
-  if (error) throw error;
-  return { success: true };
+  const { data, error } = await supabase.functions.invoke('profile-update', {
+    headers: authHeaders(),
+    body: { player_name: updates.playerName },
+  });
+  if (error) await handleFunctionError(error);
+  return data as { ok: boolean };
 }

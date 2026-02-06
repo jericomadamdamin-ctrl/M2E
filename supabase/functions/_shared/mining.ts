@@ -7,7 +7,7 @@ type GameConfig = {
   diamond_controls: { daily_cap_per_user: number; excess_diamond_oil_value: number };
   progression: { level_speed_multiplier: number; level_oil_burn_multiplier: number; level_capacity_multiplier: number; upgrade_cost_multiplier: number };
   cashout?: { enabled: boolean; minimum_diamonds_required: number; cooldown_days: number };
-  treasury?: { payout_percentage: number };
+  treasury?: { payout_percentage: number; treasury_address?: string | null };
   anti_abuse?: { rate_limits?: { cashout_requests_per_day?: number } };
 };
 

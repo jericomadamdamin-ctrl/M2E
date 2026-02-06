@@ -1,6 +1,6 @@
-import { Pickaxe, ShoppingBag, TrendingUp, User, Crown, Wallet } from 'lucide-react';
+import { Pickaxe, ShoppingBag, TrendingUp, User, Crown, Wallet, CreditCard } from 'lucide-react';
 
-export type TabType = 'mining' | 'shop' | 'market' | 'leaderboard' | 'cashout' | 'profile';
+export type TabType = 'mining' | 'shop' | 'market' | 'buy' | 'leaderboard' | 'cashout' | 'profile';
 
 interface BottomNavProps {
   activeTab: TabType;
@@ -14,6 +14,7 @@ export const BottomNav = ({ activeTab, onTabChange, machineCount, isGameReady = 
     { id: 'mining' as TabType, icon: Pickaxe, label: 'Mining', badge: machineCount > 0 ? machineCount : undefined },
     { id: 'shop' as TabType, icon: ShoppingBag, label: 'Shop' },
     { id: 'market' as TabType, icon: TrendingUp, label: 'Market' },
+    { id: 'buy' as TabType, icon: CreditCard, label: 'Buy' },
     { id: 'leaderboard' as TabType, icon: Crown, label: 'Ranks' },
     { id: 'cashout' as TabType, icon: Wallet, label: 'Cashout' },
     { id: 'profile' as TabType, icon: User, label: 'Profile' },

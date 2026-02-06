@@ -7,6 +7,7 @@ import { BottomNav, TabType } from '@/components/game/BottomNav';
 import { MiningTab } from '@/components/game/MiningTab';
 import { ShopTab } from '@/components/game/ShopTab';
 import { MarketTab } from '@/components/game/MarketTab';
+import { OilPurchaseTab } from '@/components/game/OilPurchaseTab';
 import { ProfileTab } from '@/components/game/ProfileTab';
 import { CashoutTab } from '@/components/game/CashoutTab';
 import { LeaderboardTab } from '@/components/game/LeaderboardTab';
@@ -116,6 +117,10 @@ const Index = () => {
             oilBalance={player.oilBalance}
             onExchange={exchangeMineral}
           />
+        )}
+
+        {activeTab === 'buy' && (
+          <OilPurchaseTab defaultOil={config?.pricing?.oil_per_wld ?? 1000} onComplete={refresh} />
         )}
 
         {activeTab === 'leaderboard' && (

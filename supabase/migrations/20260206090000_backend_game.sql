@@ -292,7 +292,8 @@ VALUES (
     'treasury', jsonb_build_object(
       'payout_percentage', 0.5,
       'calculation', 'payout_pool = payout_percentage * last_24h_revenue',
-      'hard_rule', 'total_payouts_must_not_exceed_payout_pool'
+      'hard_rule', 'total_payouts_must_not_exceed_payout_pool',
+      'treasury_address', null
     ),
     'cashout_distribution', jsonb_build_object(
       'formula', 'user_payout = (user_diamonds / total_submitted_diamonds) * payout_pool',

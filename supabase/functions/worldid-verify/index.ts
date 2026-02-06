@@ -36,14 +36,26 @@ Deno.serve(async (req) => {
     const nullifierHash = payload.nullifier_hash;
     const verificationLevel = payload.verification_level || payload.credential_type || 'device';
 
-    await admin
+    const { data: existing } = await admin
       .from('world_id_verifications')
-      .upsert({
-        user_id: userId,
-        action,
-        nullifier_hash: nullifierHash,
-        verification_level: verificationLevel,
-      }, { onConflict: 'nullifier_hash' });
+      .select('user_id, nullifier_hash')
+      .eq('nullifier_hash', nullifierHash)
+      .single();
+
+    if (existing && existing.user_id !== userId) {
+      throw new Error('Nullifier already used by a different user');
+    }
+
+    if (!existing) {
+      await admin
+        .from('world_id_verifications')
+        .insert({
+          user_id: userId,
+          action,
+          nullifier_hash: nullifierHash,
+          verification_level: verificationLevel,
+        });
+    }
 
     await admin
       .from('profiles')

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { fetchGameState, gameAction } from '@/lib/backend';
-import { getSession } from '@/lib/session';
+import { clearSession, getSession } from '@/lib/session';
 import { GameConfig, Machine, PlayerState, GameStateResponse, MachineType, MineralType } from '@/types/game';
 import { useToast } from '@/hooks/use-toast';
 import { getErrorMessage } from '@/lib/error';
@@ -44,6 +44,15 @@ export const useGameState = () => {
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
 
+  const handleAuthFailure = (message: string) => {
+    if (/session expired|invalid session token|missing authorization/i.test(message)) {
+      clearSession();
+      window.location.href = '/auth';
+      return true;
+    }
+    return false;
+  };
+
   const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -66,7 +75,10 @@ export const useGameState = () => {
         });
       }
     } catch (err) {
-      setError(getErrorMessage(err));
+      const message = getErrorMessage(err);
+      if (!handleAuthFailure(message)) {
+        setError(message);
+      }
     } finally {
       setLoading(false);
     }
@@ -143,10 +155,14 @@ export const useGameState = () => {
         );
       }
     } catch (err) {
+      const message = getErrorMessage(err);
+      if (handleAuthFailure(message)) {
+        return;
+      }
       // Use toast for action errors instead of global state
       toast({
         title: 'Action Failed',
-        description: getErrorMessage(err),
+        description: message,
         variant: 'destructive',
       });
     }

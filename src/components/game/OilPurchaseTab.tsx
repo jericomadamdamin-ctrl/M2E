@@ -1,0 +1,139 @@
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { useToast } from '@/hooks/use-toast';
+import { MiniKit, Tokens, tokenToDecimals, type PayCommandInput, type PayCommandResult } from '@worldcoin/minikit-js';
+import { confirmOilPurchase, initiateOilPurchase } from '@/lib/backend';
+
+interface OilPurchaseTabProps {
+  defaultOil?: number;
+  onComplete?: () => void;
+}
+
+export const OilPurchaseTab = ({ defaultOil = 1000, onComplete }: OilPurchaseTabProps) => {
+  const [token, setToken] = useState<'WLD' | 'USDC'>('WLD');
+  const [oilAmount, setOilAmount] = useState(defaultOil);
+  const [loading, setLoading] = useState(false);
+  const { toast } = useToast();
+
+  const handlePurchase = async () => {
+    if (!MiniKit.isInstalled()) {
+      toast({
+        title: 'World App required',
+        description: 'Open this mini app inside World App to purchase OIL.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (oilAmount <= 0) {
+      toast({
+        title: 'Invalid amount',
+        description: 'Enter a valid OIL amount.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const init = await initiateOilPurchase(token, oilAmount);
+
+      const tokenSymbol = token === 'WLD' ? Tokens.WLD : Tokens.USDC;
+      const tokenAmount = tokenToDecimals(init.amount_token, tokenSymbol).toString();
+
+      const payPayload: PayCommandInput = {
+        reference: init.reference,
+        to: init.to_address,
+        tokens: [
+          {
+            symbol: tokenSymbol,
+            token_amount: tokenAmount,
+          },
+        ],
+        description: init.description,
+      };
+
+      const { finalPayload } = await MiniKit.commandsAsync.pay(payPayload) as PayCommandResult;
+
+      if (finalPayload.status !== 'success') {
+        throw new Error('Payment cancelled');
+      }
+
+      const result = await confirmOilPurchase(finalPayload);
+
+      if (result.status !== 'confirmed' && result.status !== 'mined') {
+        toast({
+          title: 'Payment pending',
+          description: 'Your payment is pending. Your OIL will be credited once confirmed.',
+        });
+        return;
+      }
+
+      toast({
+        title: 'Purchase complete',
+        description: `Added ${init.amount_oil} OIL to your balance.`,
+      });
+      onComplete?.();
+    } catch (err: any) {
+      toast({
+        title: 'Purchase failed',
+        description: err?.message || 'Unable to complete purchase',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4 pb-4">
+      <div className="flex items-center justify-between px-1">
+        <h2 className="font-pixel text-xs text-primary text-glow">Buy OIL</h2>
+      </div>
+
+      <div className="card-game rounded-xl p-4 space-y-3">
+        <div>
+          <label className="text-xs text-muted-foreground">Payment Token</label>
+          <div className="flex gap-2 mt-1">
+            <Button
+              type="button"
+              variant={token === 'WLD' ? 'default' : 'outline'}
+              className="flex-1"
+              onClick={() => setToken('WLD')}
+            >
+              WLD
+            </Button>
+            <Button
+              type="button"
+              variant={token === 'USDC' ? 'default' : 'outline'}
+              className="flex-1"
+              onClick={() => setToken('USDC')}
+            >
+              USDC
+            </Button>
+          </div>
+        </div>
+
+        <div>
+          <label className="text-xs text-muted-foreground">OIL Amount</label>
+          <Input
+            type="number"
+            min={1}
+            value={oilAmount}
+            onChange={(e) => setOilAmount(Number(e.target.value))}
+            className="bg-secondary/50"
+          />
+        </div>
+
+        <Button
+          className="w-full glow-green"
+          onClick={handlePurchase}
+          disabled={loading}
+        >
+          {loading ? 'Processing...' : 'Pay with World App'}
+        </Button>
+      </div>
+    </div>
+  );
+};

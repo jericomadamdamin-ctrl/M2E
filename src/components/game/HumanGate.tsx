@@ -23,7 +23,10 @@ export const HumanGate = ({ onVerified }: HumanGateProps) => {
         return;
       }
 
-      const action = import.meta.env.VITE_WORLD_ID_ACTION || 'join_game';
+      const action =
+        import.meta.env.VITE_WORLD_ID_ACTION ||
+        import.meta.env.NEXT_PUBLIC_ACTION_VERIFY ||
+        'join_game';
 
       const session = getSession();
       const signal = session?.userId;
