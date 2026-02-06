@@ -55,7 +55,7 @@ export async function requestCashout(diamonds: number) {
 
 export async function getAuthNonce() {
   const { data, error } = await supabase.functions.invoke('auth-nonce');
-  if (error) throw error;
+  if (error) await handleFunctionError(error);
   return data as { nonce: string };
 }
 

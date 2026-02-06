@@ -46,7 +46,17 @@ const Auth = () => {
       });
 
       if (finalPayload.status !== 'success') {
-        throw new Error('Wallet auth cancelled');
+        const errorCode = (finalPayload as any).error_code ?? 'unknown_error';
+        const details = (finalPayload as any).details;
+        const detailText =
+          typeof details === 'string'
+            ? details
+            : details
+              ? JSON.stringify(details)
+              : undefined;
+        throw new Error(
+          `Wallet auth failed: ${errorCode}${detailText ? ` (${detailText})` : ''}`
+        );
       }
 
       let username: string | undefined;
