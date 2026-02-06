@@ -1,0 +1,154 @@
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useGameState } from '@/hooks/useGameState';
+import { useSession } from '@/hooks/useSession';
+import { GameHeader } from '@/components/game/GameHeader';
+import { BottomNav, TabType } from '@/components/game/BottomNav';
+import { MiningTab } from '@/components/game/MiningTab';
+import { ShopTab } from '@/components/game/ShopTab';
+import { MarketTab } from '@/components/game/MarketTab';
+import { ProfileTab } from '@/components/game/ProfileTab';
+import { CashoutTab } from '@/components/game/CashoutTab';
+import { LeaderboardTab } from '@/components/game/LeaderboardTab';
+import { HumanGate } from '@/components/game/HumanGate';
+import miningBg from '@/assets/mining-bg.jpg';
+import { Loader2 } from 'lucide-react';
+
+const Index = () => {
+  const [activeTab, setActiveTab] = useState<TabType>('mining');
+  const navigate = useNavigate();
+  const { session } = useSession();
+
+  const {
+    config,
+    player,
+    machines,
+    loading: gameLoading,
+    error: gameError,
+    profile,
+    buyMachine,
+    fuelMachine,
+    startMachine,
+    stopMachine,
+    upgradeMachine,
+    exchangeMineral,
+    refresh,
+  } = useGameState();
+
+  useEffect(() => {
+    if (!session) {
+      navigate('/auth');
+    }
+  }, [session, navigate]);
+
+  if (!session) {
+    return null;
+  }
+
+  if (gameLoading) {
+    return (
+      <div
+        className="min-h-screen flex items-center justify-center"
+        style={{
+          backgroundImage: `linear-gradient(to bottom, hsl(120 10% 4% / 0.9), hsl(120 10% 4% / 0.95)), url(${miningBg})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+        }}
+      >
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (profile && !profile.isHumanVerified) {
+    return <HumanGate onVerified={refresh} />;
+  }
+
+  const isGameReady = !!config && !gameLoading;
+
+  return (
+    <div
+      className="min-h-screen max-w-md mx-auto flex flex-col relative"
+      style={{
+        backgroundImage: `linear-gradient(to bottom, hsl(120 10% 4% / 0.85), hsl(120 10% 4% / 0.95)), url(${miningBg})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundAttachment: 'fixed',
+      }}
+    >
+      <GameHeader player={player} machines={machines} />
+
+      <main className="flex-1 px-3 pb-24 overflow-y-auto">
+        {gameError && (
+          <div className="card-game rounded-xl p-3 text-xs text-destructive mb-3">
+            {gameError}
+          </div>
+        )}
+
+        {activeTab === 'mining' && config && (
+          <MiningTab
+            machines={machines}
+            config={config}
+            oilBalance={player.oilBalance}
+            onFuel={fuelMachine}
+            onStart={startMachine}
+            onStop={stopMachine}
+            onUpgrade={upgradeMachine}
+          />
+        )}
+
+        {activeTab === 'shop' && config && (
+          <ShopTab
+            config={config}
+            oilBalance={player.oilBalance}
+            machines={machines}
+            onBuy={buyMachine}
+          />
+        )}
+
+        {activeTab === 'market' && config && (
+          <MarketTab
+            config={config}
+            minerals={player.minerals}
+            oilBalance={player.oilBalance}
+            onExchange={exchangeMineral}
+          />
+        )}
+
+        {activeTab === 'leaderboard' && (
+          <LeaderboardTab currentUserId={session.userId} />
+        )}
+
+        {activeTab === 'cashout' && config && (
+          <CashoutTab
+            diamonds={player.diamondBalance}
+            minRequired={config.cashout.minimum_diamonds_required}
+            cooldownDays={config.cashout.cooldown_days}
+          />
+        )}
+
+        {activeTab === 'profile' && (
+          <ProfileTab
+            player={player}
+            machines={machines}
+            config={config}
+            isAdmin={Boolean(profile?.isAdmin)}
+            playerName={profile?.playerName || 'Miner'}
+          />
+        )}
+      </main>
+
+      <BottomNav
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        machineCount={machines.length}
+        isGameReady={isGameReady}
+      />
+    </div>
+  );
+};
+
+export default Index;
