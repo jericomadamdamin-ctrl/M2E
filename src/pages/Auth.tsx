@@ -26,7 +26,7 @@ const Auth = () => {
     e.preventDefault();
 
     const miniKit = ensureMiniKit();
-    if (!miniKit.ok) {
+    if (miniKit.ok === false) {
       toast({
         title: 'World App required',
         description: getMiniKitErrorMessage(miniKit.reason),
