@@ -24,9 +24,9 @@ export const HumanGate = ({ onVerified }: HumanGateProps) => {
       }
 
       const action =
-        import.meta.env.VITE_WORLD_ID_ACTION ||
+        import.meta.env.VITE_WORLD_ID_ACTION_VERIFY ||
         import.meta.env.NEXT_PUBLIC_ACTION_VERIFY ||
-        'join_game';
+        'verify-human';
 
       const session = getSession();
       const signal = session?.userId;
