@@ -16,7 +16,7 @@ export const HumanGate = ({ onVerified }: HumanGateProps) => {
   const handleVerify = async () => {
     try {
       const miniKit = ensureMiniKit();
-      if (!miniKit.ok) {
+      if (miniKit.ok === false) {
         toast({
           title: 'World App required',
           description: getMiniKitErrorMessage(miniKit.reason),
@@ -51,10 +51,35 @@ export const HumanGate = ({ onVerified }: HumanGateProps) => {
         throw new Error('Verification cancelled');
       }
 
-      await supabase.functions.invoke('worldid-verify', {
+      const { error } = await supabase.functions.invoke('worldid-verify', {
         headers: { Authorization: `Bearer ${getSessionToken()}` },
         body: { payload: finalPayload as ISuccessResult, action, signal },
       });
+
+      if (error) {
+        console.error('World ID Verification Error:', error);
+        // Try to interpret the error message from the function response
+        let errorMessage = 'Verification failed on server.';
+
+        // If it's a standard Error object or similar structure with context
+        if (error instanceof Error) {
+          errorMessage = error.message;
+        }
+
+        // Check if the error has a JSON body context (common in Supabase function errors)
+        if ('context' in error && typeof (error as any).context?.json === 'function') {
+          try {
+            const errorBody = await (error as any).context.json();
+            if (errorBody?.error) {
+              errorMessage = errorBody.error;
+            }
+          } catch {
+            // ignore JSON parse error
+          }
+        }
+
+        throw new Error(errorMessage);
+      }
 
       toast({
         title: 'Verification complete',
