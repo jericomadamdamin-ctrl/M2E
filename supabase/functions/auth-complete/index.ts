@@ -3,7 +3,7 @@ import { createSession, getAdminClient } from '../_shared/supabase.ts';
 import { verifySiweMessage } from 'https://esm.sh/@worldcoin/minikit-js@1.9.6';
 
 interface CompleteRequest {
-  payload: any;
+  payload: unknown;
   nonce: string;
   player_name?: string;
   username?: string;

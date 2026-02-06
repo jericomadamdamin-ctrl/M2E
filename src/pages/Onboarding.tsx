@@ -36,10 +36,10 @@ const Onboarding = ({ userId, onComplete }: OnboardingProps) => {
       });
 
       onComplete();
-    } catch (error: any) {
+    } catch (error) {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to create profile',
+        description: error instanceof Error ? error.message : 'Failed to create profile',
         variant: 'destructive',
       });
     } finally {

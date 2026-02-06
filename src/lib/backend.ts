@@ -2,7 +2,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { GameStateResponse } from '@/types/game';
 import { getSessionToken } from '@/lib/session';
 
-const authHeaders = () => {
+export const authHeaders = () => {
   const token = getSessionToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
@@ -21,7 +21,8 @@ export async function gameAction(action: string, payload?: Record<string, unknow
     body: { action, payload },
   });
   if (error) throw error;
-  return data as { state: any; machines: any[] };
+  // biome-ignore lint/suspicious/noExplicitAny: Backend response type
+  return data as { state: GameStateResponse['state']; machines: GameStateResponse['machines'] };
 }
 
 export async function fetchConfig() {
@@ -29,7 +30,8 @@ export async function fetchConfig() {
     headers: authHeaders(),
   });
   if (error) throw error;
-  return data as { config: any };
+  // biome-ignore lint/suspicious/noExplicitAny: Backend response type
+  return data as { config: GameStateResponse['config'] };
 }
 
 export async function updateConfig(updates: Record<string, unknown>) {
@@ -38,7 +40,8 @@ export async function updateConfig(updates: Record<string, unknown>) {
     body: { updates },
   });
   if (error) throw error;
-  return data as { config: any };
+  // biome-ignore lint/suspicious/noExplicitAny: Backend response type
+  return data as { config: GameStateResponse['config'] };
 }
 
 export async function requestCashout(diamonds: number) {
@@ -47,7 +50,7 @@ export async function requestCashout(diamonds: number) {
     body: { diamonds },
   });
   if (error) throw error;
-  return data as any;
+  return data as { success: boolean; message?: string };
 }
 
 export async function getAuthNonce() {
@@ -56,7 +59,7 @@ export async function getAuthNonce() {
   return data as { nonce: string };
 }
 
-export async function completeWalletAuth(payload: any, nonce: string, playerName?: string, username?: string) {
+export async function completeWalletAuth(payload: unknown, nonce: string, playerName?: string, username?: string) {
   const { data, error } = await supabase.functions.invoke('auth-complete', {
     body: { payload, nonce, player_name: playerName, username },
   });

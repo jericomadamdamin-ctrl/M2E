@@ -50,10 +50,10 @@ export const ProfileTab = ({ player, machines, config, isAdmin, playerName }: Pr
         'cashout.cooldown_days': cashoutCooldown,
       });
       toast({ title: 'Config updated', description: 'Live pricing and controls saved.' });
-    } catch (err: any) {
+    } catch (err) {
       toast({
         title: 'Update failed',
-        description: err?.message || 'Unable to save admin settings',
+        description: err instanceof Error ? err.message : 'Unable to save admin settings',
         variant: 'destructive',
       });
     } finally {
@@ -125,9 +125,8 @@ export const ProfileTab = ({ player, machines, config, isAdmin, playerName }: Pr
             {machines.map(machine => (
               <div
                 key={machine.id}
-                className={`flex items-center gap-3 bg-secondary/30 rounded-lg p-2 ${
-                  machine.isActive ? 'border border-primary/30' : ''
-                }`}
+                className={`flex items-center gap-3 bg-secondary/30 rounded-lg p-2 ${machine.isActive ? 'border border-primary/30' : ''
+                  }`}
               >
                 <span className="text-2xl">⛏️</span>
                 <div className="flex-1">
@@ -136,11 +135,10 @@ export const ProfileTab = ({ player, machines, config, isAdmin, playerName }: Pr
                     Level {machine.level}
                   </div>
                 </div>
-                <div className={`px-2 py-0.5 rounded text-xs font-bold ${
-                  machine.isActive
+                <div className={`px-2 py-0.5 rounded text-xs font-bold ${machine.isActive
                     ? 'bg-primary/20 text-primary'
                     : 'bg-muted text-muted-foreground'
-                }`}>
+                  }`}>
                   {machine.isActive ? 'ACTIVE' : 'IDLE'}
                 </div>
               </div>

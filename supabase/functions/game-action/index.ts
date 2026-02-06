@@ -42,7 +42,8 @@ Deno.serve(async (req) => {
       Object.keys(config.mining.action_rewards.minerals).map((key) => [key, 0])
     ) as Record<string, number>;
 
-    let updatedState = { ...state, minerals: { ...mineralDefaults, ...(state.minerals || {}) } } as any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const updatedState = { ...state, minerals: { ...mineralDefaults, ...(state.minerals || {}) } } as any;
 
     if (action === 'buy_machine') {
       const machineType = payload?.machineType as string;

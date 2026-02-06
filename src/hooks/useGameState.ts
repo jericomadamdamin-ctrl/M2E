@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { fetchGameState, gameAction } from '@/lib/backend';
 import { getSession } from '@/lib/session';
 import { GameConfig, Machine, PlayerState, GameStateResponse, MachineType, MineralType } from '@/types/game';
+import { useToast } from '@/hooks/use-toast';
+import { getErrorMessage } from '@/lib/error';
 
 const defaultMinerals: Record<MineralType, number> = {
   bronze: 0,
@@ -40,6 +42,7 @@ export const useGameState = () => {
   const [profile, setProfile] = useState<{ playerName?: string; isAdmin?: boolean; isHumanVerified?: boolean } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -62,8 +65,8 @@ export const useGameState = () => {
           isHumanVerified: Boolean(response.profile.is_human_verified),
         });
       }
-    } catch (err: any) {
-      setError(err?.message || 'Failed to load game state');
+    } catch (err) {
+      setError(getErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -86,10 +89,34 @@ export const useGameState = () => {
   }, [refresh]);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      refresh();
-    }, 30000);
-    return () => clearInterval(interval);
+    let intervalId: NodeJS.Timeout;
+
+    const startPolling = () => {
+      if (intervalId) clearInterval(intervalId);
+
+      // Poll faster (5s) when visible, slower (30s) when hidden
+      const isVisible = document.visibilityState === 'visible';
+      const delay = isVisible ? 5000 : 30000;
+
+      intervalId = setInterval(() => {
+        refresh();
+      }, delay);
+    };
+
+    const handleVisibilityChange = () => {
+      startPolling();
+      if (document.visibilityState === 'visible') {
+        refresh(); // Immediate refresh when returning to tab
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    startPolling();
+
+    return () => {
+      clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [refresh]);
 
   const executeAction = useCallback(async (action: string, payload?: Record<string, unknown>) => {
@@ -105,7 +132,7 @@ export const useGameState = () => {
       }
       if (result?.machines) {
         setMachines(
-          result.machines.map((m: any) => ({
+          result.machines.map((m) => ({
             id: m.id,
             type: m.type,
             level: m.level,
@@ -115,10 +142,15 @@ export const useGameState = () => {
           }))
         );
       }
-    } catch (err: any) {
-      setError(err?.message || 'Action failed');
+    } catch (err) {
+      // Use toast for action errors instead of global state
+      toast({
+        title: 'Action Failed',
+        description: getErrorMessage(err),
+        variant: 'destructive',
+      });
     }
-  }, []);
+  }, [toast]);
 
   const buyMachine = useCallback((type: MachineType) => executeAction('buy_machine', { machineType: type }), [executeAction]);
   const fuelMachine = useCallback((machineId: string, amount?: number) => executeAction('fuel_machine', { machineId, amount }), [executeAction]);

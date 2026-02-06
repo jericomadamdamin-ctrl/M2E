@@ -48,10 +48,10 @@ export const HumanGate = ({ onVerified }: HumanGateProps) => {
         description: 'You are verified to play.',
       });
       onVerified();
-    } catch (err: any) {
+    } catch (err) {
       toast({
         title: 'Verification failed',
-        description: err?.message || 'Unable to verify',
+        description: err instanceof Error ? err.message : 'Unable to verify',
         variant: 'destructive',
       });
     }

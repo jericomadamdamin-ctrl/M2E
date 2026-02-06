@@ -39,12 +39,13 @@ Deno.serve(async (req) => {
       throw new Error('No requests to process');
     }
 
-    const totalDiamonds = requests.reduce((sum, r: any) => sum + Number(r.diamonds_submitted || 0), 0);
+    const totalDiamonds = requests.reduce((sum, r: { diamonds_submitted: number }) => sum + Number(r.diamonds_submitted || 0), 0);
     const payoutPool = Number(round.payout_pool_wld || 0);
 
     let remainingPool = payoutPool;
 
     for (let i = 0; i < requests.length; i++) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const reqRow = requests[i] as any;
       const share = totalDiamonds > 0 ? Number(reqRow.diamonds_submitted) / totalDiamonds : 0;
       let payout = payoutPool * share;

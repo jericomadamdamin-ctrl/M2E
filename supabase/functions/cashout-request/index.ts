@@ -95,7 +95,7 @@ Deno.serve(async (req) => {
         .gte('created_at', revenueWindowStart)
         .lte('created_at', revenueWindowEnd);
 
-      const revenueWld = (revenueRows || []).reduce((sum, r: any) => sum + Number(r.amount_wld || 0), 0);
+      const revenueWld = (revenueRows || []).reduce((sum, r: { amount_wld: number }) => sum + Number(r.amount_wld || 0), 0);
       const payoutPercentage = Number(config.treasury.payout_percentage || 0);
       const payoutPool = revenueWld * payoutPercentage;
 

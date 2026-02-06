@@ -26,10 +26,10 @@ export const CashoutTab = ({ diamonds, minRequired, cooldownDays }: CashoutTabPr
         title: 'Cashout requested',
         description: 'Your request is queued for the next payout round.',
       });
-    } catch (err: any) {
+    } catch (err) {
       toast({
         title: 'Cashout failed',
-        description: err?.message || 'Unable to request cashout',
+        description: err instanceof Error ? err.message : 'Unable to request cashout',
         variant: 'destructive',
       });
     } finally {

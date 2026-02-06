@@ -94,7 +94,7 @@ export async function processMining(userId: string) {
   const machines = await getPlayerMachines(userId);
 
   const mineralDefaults = Object.fromEntries(Object.keys(config.mining.action_rewards.minerals).map((key) => [key, 0])) as Record<string, number>;
-  let minerals = { ...mineralDefaults, ...(state.minerals || {}) } as Record<string, number>;
+  const minerals = { ...mineralDefaults, ...(state.minerals || {}) } as Record<string, number>;
   let oilBalance = Number(state.oil_balance);
   let diamondBalance = Number(state.diamond_balance);
   let dailyCount = Number(state.daily_diamond_count);
@@ -151,7 +151,7 @@ export async function processMining(userId: string) {
 
     const actions = Math.floor(effectiveHours * speed);
     const oilUsed = effectiveHours * burn;
-    let fuelRemaining = Math.max(0, machine.fuel_oil - oilUsed);
+    const fuelRemaining = Math.max(0, machine.fuel_oil - oilUsed);
 
     if (actions > 0) {
       for (let i = 0; i < actions; i++) {

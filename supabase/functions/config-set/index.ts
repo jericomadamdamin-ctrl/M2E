@@ -1,6 +1,7 @@
 import { corsHeaders, handleOptions } from '../_shared/cors.ts';
 import { getAdminClient, requireUserId, requireAdmin } from '../_shared/supabase.ts';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const setByPath = (obj: any, path: string, value: any) => {
   const parts = path.split('.');
   let cursor = obj;
