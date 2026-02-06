@@ -3,6 +3,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useGameState } from './useGameState';
 import * as backend from '@/lib/backend';
 import * as session from '@/lib/session';
+import { MemoryRouter } from 'react-router-dom';
+import { createElement, type ReactNode } from 'react';
 
 // Mock dependencies
 vi.mock('@/lib/backend', () => ({
@@ -12,6 +14,7 @@ vi.mock('@/lib/backend', () => ({
 
 vi.mock('@/lib/session', () => ({
     getSession: vi.fn(),
+    clearSession: vi.fn(),
 }));
 
 vi.mock('@/hooks/use-toast', () => ({
@@ -19,6 +22,9 @@ vi.mock('@/hooks/use-toast', () => ({
 }));
 
 describe('useGameState', () => {
+    const wrapper = ({ children }: { children: ReactNode }) =>
+        createElement(MemoryRouter, null, children);
+
     const mockState = {
         oil_balance: 100,
         diamond_balance: 10,
@@ -41,7 +47,7 @@ describe('useGameState', () => {
     });
 
     it('initializes and fetches game state', async () => {
-        const { result } = renderHook(() => useGameState());
+        const { result } = renderHook(() => useGameState(), { wrapper });
 
         expect(result.current.loading).toBe(true);
 
@@ -58,7 +64,7 @@ describe('useGameState', () => {
     it('handles fetch error', async () => {
         (backend.fetchGameState as any).mockRejectedValue(new Error('Fetch failed'));
 
-        const { result } = renderHook(() => useGameState());
+        const { result } = renderHook(() => useGameState(), { wrapper });
 
         await waitFor(() => expect(result.current.loading).toBe(false));
 
@@ -66,7 +72,7 @@ describe('useGameState', () => {
     });
 
     it('optimistically updates state on action', async () => {
-        const { result } = renderHook(() => useGameState());
+        const { result } = renderHook(() => useGameState(), { wrapper });
         await waitFor(() => expect(result.current.loading).toBe(false));
 
         const actionResponse = {

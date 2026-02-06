@@ -46,7 +46,9 @@ const Index = () => {
     return null;
   }
 
-  if (gameLoading) {
+  // Avoid "full-page reload" feeling on background sync / manual refresh.
+  // Only show the blocking loader on the very first load (when we have no config yet).
+  if (gameLoading && !config) {
     return (
       <div
         className="min-h-screen flex items-center justify-center"

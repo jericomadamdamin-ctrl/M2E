@@ -7,6 +7,12 @@ export interface AppSession {
 }
 
 const STORAGE_KEY = 'mine_to_earn_session';
+const SESSION_EVENT = 'mine_to_earn_session_change';
+
+const notifySessionChange = () => {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new Event(SESSION_EVENT));
+};
 
 export const getSession = (): AppSession | null => {
   if (typeof window === 'undefined') return null;
@@ -21,10 +27,18 @@ export const getSession = (): AppSession | null => {
 
 export const setSession = (session: AppSession) => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+  notifySessionChange();
 };
 
 export const clearSession = () => {
   localStorage.removeItem(STORAGE_KEY);
+  notifySessionChange();
 };
 
 export const getSessionToken = () => getSession()?.token || null;
+
+export const onSessionChange = (handler: () => void) => {
+  if (typeof window === 'undefined') return () => {};
+  window.addEventListener(SESSION_EVENT, handler);
+  return () => window.removeEventListener(SESSION_EVENT, handler);
+};

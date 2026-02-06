@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { fetchGameState, gameAction } from '@/lib/backend';
 import { clearSession, getSession } from '@/lib/session';
 import { GameConfig, Machine, PlayerState, GameStateResponse, MachineType, MineralType } from '@/types/game';
@@ -32,6 +33,7 @@ const mapState = (response: GameStateResponse) => {
 };
 
 export const useGameState = () => {
+  const navigate = useNavigate();
   const [config, setConfig] = useState<GameConfig | null>(null);
   const [player, setPlayer] = useState<PlayerState>({
     oilBalance: 0,
@@ -49,9 +51,9 @@ export const useGameState = () => {
   const initialFetchDoneRef = useRef(false);
 
   const handleAuthFailure = (message: string) => {
-    if (/session expired|invalid session token|missing authorization/i.test(message)) {
+    if (/session expired|invalid session token|missing authorization|missing app session token/i.test(message)) {
       clearSession();
-      window.location.href = '/auth';
+      navigate('/auth', { replace: true });
       return true;
     }
     return false;
