@@ -10,6 +10,7 @@ import { MiniKit } from '@worldcoin/minikit-js';
 import { completeWalletAuth, getAuthNonce, updateProfile } from '@/lib/backend';
 import { useSession } from '@/hooks/useSession';
 import { getErrorMessage } from '@/lib/error';
+import { ensureMiniKit, getMiniKitErrorMessage } from '@/lib/minikit';
 
 type AuthStep = 'signin' | 'profile';
 
@@ -24,10 +25,11 @@ const Auth = () => {
   const handleWalletAuth = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!MiniKit.isInstalled()) {
+    const miniKit = ensureMiniKit();
+    if (!miniKit.ok) {
       toast({
         title: 'World App required',
-        description: 'Open this mini app inside World App to sign in.',
+        description: getMiniKitErrorMessage(miniKit.reason),
         variant: 'destructive',
       });
       return;

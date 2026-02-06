@@ -1,0 +1,45 @@
+import { MiniKit } from '@worldcoin/minikit-js';
+
+type MiniKitEnsureResult =
+  | { ok: true }
+  | { ok: false; reason: 'outside_of_worldapp' | 'app_out_of_date' | 'unknown' | 'not_ready' };
+
+export const ensureMiniKit = (): MiniKitEnsureResult => {
+  if (typeof window === 'undefined') {
+    return { ok: false, reason: 'not_ready' };
+  }
+
+  if (MiniKit.isInstalled()) {
+    return { ok: true };
+  }
+
+  const appId = import.meta.env.VITE_WORLD_APP_ID || undefined;
+  const installResult = MiniKit.install(appId);
+
+  if (installResult.success) {
+    return { ok: true };
+  }
+
+  if (installResult.errorCode === 'outside_of_worldapp') {
+    return { ok: false, reason: 'outside_of_worldapp' };
+  }
+
+  if (installResult.errorCode === 'app_out_of_date') {
+    return { ok: false, reason: 'app_out_of_date' };
+  }
+
+  return { ok: false, reason: 'unknown' };
+};
+
+export const getMiniKitErrorMessage = (reason: MiniKitEnsureResult['reason']) => {
+  switch (reason) {
+    case 'outside_of_worldapp':
+      return 'Open this mini app inside World App to continue.';
+    case 'app_out_of_date':
+      return 'Please update World App to the latest version and try again.';
+    case 'not_ready':
+      return 'World App is still initializing. Please try again in a moment.';
+    default:
+      return 'MiniKit failed to initialize. Please try again.';
+  }
+};

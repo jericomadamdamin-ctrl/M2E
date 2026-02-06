@@ -4,6 +4,7 @@ import { Shield } from 'lucide-react';
 import { MiniKit, VerificationLevel, type ISuccessResult } from '@worldcoin/minikit-js';
 import { supabase } from '@/integrations/supabase/client';
 import { getSession, getSessionToken } from '@/lib/session';
+import { ensureMiniKit, getMiniKitErrorMessage } from '@/lib/minikit';
 
 interface HumanGateProps {
   onVerified: () => void;
@@ -14,10 +15,11 @@ export const HumanGate = ({ onVerified }: HumanGateProps) => {
 
   const handleVerify = async () => {
     try {
-      if (!MiniKit.isInstalled()) {
+      const miniKit = ensureMiniKit();
+      if (!miniKit.ok) {
         toast({
           title: 'World App required',
-          description: 'Open this mini app inside World App to verify.',
+          description: getMiniKitErrorMessage(miniKit.reason),
           variant: 'destructive',
         });
         return;
@@ -31,10 +33,18 @@ export const HumanGate = ({ onVerified }: HumanGateProps) => {
       const session = getSession();
       const signal = session?.userId;
 
+      const requestedLevel = import.meta.env.VITE_WORLD_ID_LEVEL?.toLowerCase();
+      const verificationLevel =
+        requestedLevel === 'orb'
+          ? VerificationLevel.Orb
+          : requestedLevel === 'device'
+            ? VerificationLevel.Device
+            : undefined;
+
       const { finalPayload } = await MiniKit.commandsAsync.verify({
         action,
         signal,
-        verification_level: VerificationLevel.Device,
+        ...(verificationLevel ? { verification_level: verificationLevel } : {}),
       });
 
       if (finalPayload.status !== 'success') {

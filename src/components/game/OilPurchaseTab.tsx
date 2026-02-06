@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { MiniKit, Tokens, tokenToDecimals, type PayCommandInput, type PayCommandResult } from '@worldcoin/minikit-js';
 import { confirmOilPurchase, initiateOilPurchase } from '@/lib/backend';
+import { ensureMiniKit, getMiniKitErrorMessage } from '@/lib/minikit';
 
 interface OilPurchaseTabProps {
   defaultOil?: number;
@@ -17,10 +18,11 @@ export const OilPurchaseTab = ({ defaultOil = 1000, onComplete }: OilPurchaseTab
   const { toast } = useToast();
 
   const handlePurchase = async () => {
-    if (!MiniKit.isInstalled()) {
+    const miniKit = ensureMiniKit();
+    if (!miniKit.ok) {
       toast({
         title: 'World App required',
-        description: 'Open this mini app inside World App to purchase OIL.',
+        description: getMiniKitErrorMessage(miniKit.reason),
         variant: 'destructive',
       });
       return;
