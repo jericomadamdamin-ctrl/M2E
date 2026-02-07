@@ -191,6 +191,21 @@ export const useGameState = () => {
           }))
         );
       }
+
+      // Success Toasts
+      if (action === 'buy_machine') {
+        toast({ title: 'Machine Purchased!', description: `You bought a ${payload?.machineType} machine.`, className: 'glow-green' });
+      } else if (action === 'upgrade_machine') {
+        toast({ title: 'Upgrade Complete!', description: 'Machine upgraded successfully.', className: 'glow-green' });
+      } else if (action === 'fuel_machine') {
+        toast({ title: 'Refueled!', description: 'Machine tank refilled.', className: 'glow-green' });
+      } else if (action === 'exchange_minerals') {
+        toast({ title: 'Exchange Successful!', description: 'Minerals exchanged for OIL.', className: 'glow-green' });
+      } else if (action === 'start_machine') {
+        toast({ title: 'Mining Started!', description: 'Machine is now active.', className: 'glow-green' });
+      } else if (action === 'stop_machine') {
+        toast({ title: 'Mining Stopped', description: 'Machine halted.' });
+      }
     } catch (err) {
       const message = getErrorMessage(err);
       if (handleAuthFailure(message)) {

@@ -73,8 +73,9 @@ export const OilPurchaseTab = ({ defaultOil = 1000, onComplete }: OilPurchaseTab
       }
 
       toast({
-        title: 'Purchase complete',
-        description: `Added ${init.amount_oil} OIL to your balance.`,
+        title: 'Payment Successful!',
+        description: `+${init.amount_oil} OIL has been added to your account.`,
+        className: 'glow-green'
       });
       onComplete?.(result.oil_balance);
     } catch (err: any) {
