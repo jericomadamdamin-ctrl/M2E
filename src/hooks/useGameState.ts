@@ -60,11 +60,11 @@ export const useGameState = () => {
     return false;
   };
 
-  const refresh = useCallback(async (showLoading = false) => {
-    // Prevent concurrent refreshes
-    if (isFetchingRef.current) return;
-    // Avoid racing refreshes with actions (they touch the same rows).
-    if (isMutatingRef.current) return;
+  const refresh = useCallback(async (showLoading = false, force = false) => {
+    // Prevent concurrent refreshes unless forced
+    if (isFetchingRef.current && !force) return;
+    // Avoid racing refreshes with actions (they touch the same rows) unless forced
+    if (isMutatingRef.current && !force) return;
 
     const session = getSession();
     if (!session) {
@@ -223,6 +223,10 @@ export const useGameState = () => {
   const upgradeMachine = useCallback((machineId: string) => executeAction('upgrade_machine', { machineId }), [executeAction]);
   const exchangeMineral = useCallback((mineral: MineralType, amount: number) => executeAction('exchange_minerals', { mineral, amount }), [executeAction]);
 
+  const mutateState = useCallback((updater: (prev: PlayerState) => PlayerState) => {
+    setPlayer(updater);
+  }, []);
+
   return {
     config,
     player,
@@ -230,7 +234,8 @@ export const useGameState = () => {
     loading,
     error,
     profile,
-    refresh: () => refresh(true),
+    refresh: (force = false) => refresh(true, force),
+    mutateState,
     buyMachine,
     fuelMachine,
     startMachine,

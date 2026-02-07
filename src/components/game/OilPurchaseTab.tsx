@@ -8,7 +8,7 @@ import { ensureMiniKit, getMiniKitErrorMessage } from '@/lib/minikit';
 
 interface OilPurchaseTabProps {
   defaultOil?: number;
-  onComplete?: () => void;
+  onComplete?: (newBalance?: number) => void;
 }
 
 export const OilPurchaseTab = ({ defaultOil = 1000, onComplete }: OilPurchaseTabProps) => {
@@ -76,7 +76,7 @@ export const OilPurchaseTab = ({ defaultOil = 1000, onComplete }: OilPurchaseTab
         title: 'Purchase complete',
         description: `Added ${init.amount_oil} OIL to your balance.`,
       });
-      onComplete?.();
+      onComplete?.(result.oil_balance);
     } catch (err: any) {
       toast({
         title: 'Purchase failed',

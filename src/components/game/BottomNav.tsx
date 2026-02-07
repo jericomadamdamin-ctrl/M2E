@@ -1,6 +1,6 @@
 import { Pickaxe, ShoppingBag, TrendingUp, User, Crown, Wallet, CreditCard } from 'lucide-react';
 
-export type TabType = 'mining' | 'shop' | 'market' | 'buy' | 'leaderboard' | 'cashout' | 'profile';
+export type TabType = 'mining' | 'shop' | 'market' | 'bank' | 'leaderboard' | 'profile';
 
 interface BottomNavProps {
   activeTab: TabType;
@@ -14,9 +14,8 @@ export const BottomNav = ({ activeTab, onTabChange, machineCount, isGameReady = 
     { id: 'mining' as TabType, icon: Pickaxe, label: 'Mining', badge: machineCount > 0 ? machineCount : undefined },
     { id: 'shop' as TabType, icon: ShoppingBag, label: 'Shop' },
     { id: 'market' as TabType, icon: TrendingUp, label: 'Market' },
-    { id: 'buy' as TabType, icon: CreditCard, label: 'Buy' },
+    { id: 'bank' as TabType, icon: Wallet, label: 'Bank' },
     { id: 'leaderboard' as TabType, icon: Crown, label: 'Ranks' },
-    { id: 'cashout' as TabType, icon: Wallet, label: 'Cashout' },
     { id: 'profile' as TabType, icon: User, label: 'Profile' },
   ];
 
@@ -34,11 +33,10 @@ export const BottomNav = ({ activeTab, onTabChange, machineCount, isGameReady = 
                   key={tab.id}
                   onClick={() => onTabChange(tab.id)}
                   disabled={!isGameReady}
-                  className={`relative flex flex-col items-center gap-0.5 px-2 py-2 rounded-xl transition-all duration-200 ${
-                    isActive
-                      ? 'text-primary'
-                      : 'text-muted-foreground hover:text-foreground'
-                  } ${!isGameReady ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  className={`relative flex flex-col items-center gap-0.5 px-2 py-2 rounded-xl transition-all duration-200 ${isActive
+                    ? 'text-primary'
+                    : 'text-muted-foreground hover:text-foreground'
+                    } ${!isGameReady ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   {isActive && (
                     <div className="absolute inset-0 bg-primary/10 rounded-xl glow-green" />

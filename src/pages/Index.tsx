@@ -6,10 +6,9 @@ import { GameHeader } from '@/components/game/GameHeader';
 import { BottomNav, TabType } from '@/components/game/BottomNav';
 import { MiningTab } from '@/components/game/MiningTab';
 import { ShopTab } from '@/components/game/ShopTab';
+import { BankTab } from '@/components/game/BankTab';
 import { MarketTab } from '@/components/game/MarketTab';
-import { OilPurchaseTab } from '@/components/game/OilPurchaseTab';
 import { ProfileTab } from '@/components/game/ProfileTab';
-import { CashoutTab } from '@/components/game/CashoutTab';
 import { LeaderboardTab } from '@/components/game/LeaderboardTab';
 import { HumanGate } from '@/components/game/HumanGate';
 import miningBg from '@/assets/mining-bg.jpg';
@@ -34,6 +33,7 @@ const Index = () => {
     upgradeMachine,
     exchangeMineral,
     refresh,
+    mutateState,
   } = useGameState();
 
   useEffect(() => {
@@ -121,19 +121,18 @@ const Index = () => {
           />
         )}
 
-        {activeTab === 'buy' && (
-          <OilPurchaseTab defaultOil={config?.pricing?.oil_per_wld ?? 1000} onComplete={refresh} />
-        )}
-
-        {activeTab === 'leaderboard' && (
-          <LeaderboardTab currentUserId={session.userId} />
-        )}
-
-        {activeTab === 'cashout' && config && (
-          <CashoutTab
-            diamonds={player.diamondBalance}
-            minRequired={config.cashout.minimum_diamonds_required}
-            cooldownDays={config.cashout.cooldown_days}
+        {activeTab === 'bank' && config && (
+          <BankTab
+            oilBalance={player.oilBalance}
+            diamondBalance={player.diamondBalance}
+            config={config}
+            defaultOil={config.pricing?.oil_per_wld ?? 1000}
+            onPurchaseComplete={(newBalance) => {
+              if (newBalance !== undefined) {
+                mutateState(prev => ({ ...prev, oilBalance: newBalance }));
+              }
+              refresh(true);
+            }}
           />
         )}
 

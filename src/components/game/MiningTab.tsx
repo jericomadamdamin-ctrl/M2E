@@ -1,8 +1,12 @@
-import { Machine, GameConfig } from '@/types/game';
+import { Machine, GameConfig, MachineType } from '@/types/game';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Play, Square, Droplet, Plus } from 'lucide-react';
 import { useMemo } from 'react';
+import miningMachineIcon from '@/assets/machines/mining-machine.png';
+import heavyMachineIcon from '@/assets/machines/heavy-machine.png';
+import lightMachineIcon from '@/assets/machines/light-machine.png';
+import miniMachineIcon from '@/assets/machines/mini-machine.png';
 
 interface MiningTabProps {
   machines: Machine[];
@@ -21,11 +25,17 @@ const MACHINE_NAMES: Record<string, string> = {
   mega: 'Mega Machine',
 };
 
-const MACHINE_ICONS: Record<string, string> = {
-  mini: '⛏️',
-  light: '🔨',
-  heavy: '🏗️',
-  mega: '🚀',
+const getMachineIcon = (type: MachineType) => {
+  switch (type) {
+    case 'mini':
+      return miniMachineIcon;
+    case 'heavy':
+      return heavyMachineIcon;
+    case 'light':
+      return lightMachineIcon;
+    default:
+      return miningMachineIcon;
+  }
 };
 
 const getMultiplier = (base: number, level: number, perLevel: number) => {
@@ -76,14 +86,13 @@ export const MiningTab = ({ machines, config, oilBalance, onFuel, onStart, onSto
               <div className="flex gap-4">
                 {/* Machine Icon & Status */}
                 <div className="flex flex-col items-center">
-                  <div className={`text-4xl ${machine.isActive ? 'animate-mining' : ''}`}>
-                    {MACHINE_ICONS[machine.type] || '⛏️'}
+                  <div className={`relative w-12 h-12 flex items-center justify-center ${machine.isActive ? 'animate-mining' : ''}`}>
+                    <img src={getMachineIcon(machine.type)} alt={machine.type} className="w-full h-full object-contain" />
                   </div>
-                  <div className={`mt-2 px-2 py-0.5 rounded text-xs font-bold ${
-                    machine.isActive
-                      ? 'bg-primary/20 text-primary'
-                      : 'bg-muted text-muted-foreground'
-                  }`}>
+                  <div className={`mt-2 px-2 py-0.5 rounded text-xs font-bold ${machine.isActive
+                    ? 'bg-primary/20 text-primary'
+                    : 'bg-muted text-muted-foreground'
+                    }`}>
                     {machine.isActive ? 'MINING' : 'IDLE'}
                   </div>
                 </div>
