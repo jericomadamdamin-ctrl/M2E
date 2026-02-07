@@ -106,20 +106,28 @@ export async function checkRateLimit(
             return { allowed: false, remaining: 0 };
         }
 
-        // Record this request
-        await admin.from('rate_limits').insert({
+        // Record this request - use current minute as window to avoid conflicts
+        const currentMinute = new Date();
+        currentMinute.setSeconds(0, 0);
+
+        await admin.from('rate_limits').upsert({
             user_id: userId,
             action,
-            window_start: new Date().toISOString(),
+            window_start: currentMinute.toISOString(),
             request_count: 1,
+        }, {
+            onConflict: 'user_id,action,window_start',
+            ignoreDuplicates: false,
         });
 
         return { allowed: true, remaining: maxRequests - totalRequests - 1 };
-    } catch {
+    } catch (err) {
         // On error, allow the request but log it
+        console.error('[RateLimit] Error:', err);
         return { allowed: true, remaining: 0 };
     }
 }
+
 
 /**
  * Validate numeric range
