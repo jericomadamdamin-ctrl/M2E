@@ -1,6 +1,7 @@
 import { corsHeaders, handleOptions } from '../_shared/cors.ts';
 import { getAdminClient, requireUserId, requireHuman } from '../_shared/supabase.ts';
 import { getGameConfig, ensurePlayerState, processMining } from '../_shared/mining.ts';
+import { logSecurityEvent, extractClientInfo, isFeatureEnabled } from '../_shared/security.ts';
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -23,6 +24,12 @@ Deno.serve(async (req) => {
 
     if (requestedDiamonds <= 0) {
       throw new Error('Invalid diamond amount');
+    }
+
+    // Phase 0: Feature flag check
+    const cashoutEnabled = await isFeatureEnabled('cashout_enabled');
+    if (!cashoutEnabled) {
+      throw new Error('Cashout temporarily disabled');
     }
 
     const config = await getGameConfig();
@@ -145,10 +152,27 @@ Deno.serve(async (req) => {
       .update({ total_diamonds: Number(round.total_diamonds || 0) + requestedDiamonds })
       .eq('id', round.id);
 
+    // Log successful cashout request
+    logSecurityEvent({
+      event_type: 'cashout_request',
+      user_id: userId,
+      severity: 'info',
+      action: 'cashout_submit',
+      details: { diamonds: requestedDiamonds, round_id: round.id },
+    });
+
     return new Response(JSON.stringify({ ok: true, request: requestRow, round }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (err) {
+    const clientInfo = extractClientInfo(req);
+    logSecurityEvent({
+      event_type: 'validation_failed',
+      severity: 'warning',
+      action: 'cashout_request',
+      details: { error: (err as Error).message },
+      ...clientInfo,
+    });
     return new Response(JSON.stringify({ error: (err as Error).message }), {
       status: 400,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

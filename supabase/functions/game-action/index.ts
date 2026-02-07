@@ -1,6 +1,7 @@
 import { corsHeaders, handleOptions } from '../_shared/cors.ts';
 import { getAdminClient, requireUserId, requireHuman } from '../_shared/supabase.ts';
 import { getGameConfig, getPlayerMachines, processMining, getTankCapacity, getUpgradeCost } from '../_shared/mining.ts';
+import { logSecurityEvent, extractClientInfo, checkRateLimit, isFeatureEnabled, validateRange } from '../_shared/security.ts';
 
 Deno.serve(async (req) => {
   const preflight = handleOptions(req);
@@ -20,6 +21,27 @@ Deno.serve(async (req) => {
 
     if (!action) {
       throw new Error('Missing action');
+    }
+
+    // Phase 0: Feature flag check
+    const gameEnabled = await isFeatureEnabled('game_actions_enabled');
+    if (!gameEnabled) {
+      throw new Error('Game actions temporarily disabled');
+    }
+
+    // Phase 3: Rate limiting (10 actions per minute)
+    const rateCheck = await checkRateLimit(userId, 'game_action', 60, 1);
+    if (!rateCheck.allowed) {
+      const clientInfo = extractClientInfo(req);
+      logSecurityEvent({
+        event_type: 'rate_limit_exceeded',
+        user_id: userId,
+        severity: 'warning',
+        action: 'game_action',
+        details: { attempted_action: action },
+        ...clientInfo,
+      });
+      throw new Error('Rate limit exceeded. Please slow down.');
     }
 
     const admin = getAdminClient();
@@ -165,10 +187,27 @@ Deno.serve(async (req) => {
 
     const machines = await getPlayerMachines(userId);
 
+    // Log successful game action
+    logSecurityEvent({
+      event_type: 'game_action',
+      user_id: userId,
+      severity: 'info',
+      action,
+      details: { payload },
+    });
+
     return new Response(JSON.stringify({ ok: true, state: updatedState, machines }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (err) {
+    const clientInfo = extractClientInfo(req);
+    logSecurityEvent({
+      event_type: 'validation_failed',
+      severity: 'warning',
+      action: 'game_action',
+      details: { error: (err as Error).message },
+      ...clientInfo,
+    });
     return new Response(JSON.stringify({ error: (err as Error).message }), {
       status: 400,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

@@ -1,5 +1,6 @@
 import { corsHeaders, handleOptions } from '../_shared/cors.ts';
 import { createSession, getAdminClient } from '../_shared/supabase.ts';
+import { logSecurityEvent, extractClientInfo } from '../_shared/security.ts';
 import { SiweMessage } from 'https://esm.sh/siwe@2.3.2';
 import { verifyMessage } from 'https://esm.sh/ethers@6.11.1';
 
@@ -184,6 +185,14 @@ Deno.serve(async (req) => {
     );
   } catch (err) {
     console.error('auth-complete error:', err);
+    const clientInfo = extractClientInfo(req);
+    logSecurityEvent({
+      event_type: 'auth_failure',
+      severity: 'warning',
+      action: 'auth-complete',
+      details: { error: (err as Error).message },
+      ...clientInfo,
+    });
     return new Response(JSON.stringify({ error: (err as Error).message }), {
       status: 400,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

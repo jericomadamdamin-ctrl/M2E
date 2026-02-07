@@ -1,5 +1,6 @@
 import { corsHeaders, handleOptions } from '../_shared/cors.ts';
 import { getAdminClient, requireUserId, requireHuman } from '../_shared/supabase.ts';
+import { logSecurityEvent, extractClientInfo, isFeatureEnabled, validateRange } from '../_shared/security.ts';
 
 const DEV_PORTAL_API = 'https://developer.worldcoin.org/api/v2/minikit/transaction';
 
@@ -64,6 +65,26 @@ Deno.serve(async (req) => {
 
     if (tx?.to && purchase.to_address && tx.to.toLowerCase() !== purchase.to_address.toLowerCase()) {
       throw new Error('Treasury address mismatch');
+    }
+
+    // Phase 5: Verify transaction amount matches expected payment
+    // This prevents attacks where user initiates large purchase but sends small amount
+    if (tx?.input_token?.amount) {
+      const txAmount = parseFloat(tx.input_token.amount);
+      const expectedAmount = Number(purchase.amount_token);
+      // Allow 1% tolerance for rounding
+      if (txAmount < expectedAmount * 0.99) {
+        const clientInfo = extractClientInfo(req);
+        logSecurityEvent({
+          event_type: 'suspicious_activity',
+          user_id: userId,
+          severity: 'critical',
+          action: 'underpayment_attempt',
+          details: { expected: expectedAmount, received: txAmount, reference: payload.reference },
+          ...clientInfo,
+        });
+        throw new Error('Transaction amount mismatch');
+      }
     }
 
     if (tx?.transaction_status && tx.transaction_status === 'failed') {
@@ -139,10 +160,27 @@ Deno.serve(async (req) => {
     }
     // --- End Referral Bonus Logic ---
 
+    // Log successful purchase confirmation
+    logSecurityEvent({
+      event_type: 'purchase_confirmed',
+      user_id: userId,
+      severity: 'info',
+      action: 'oil_purchase',
+      details: { oil_amount: purchase.amount_oil, reference: payload.reference },
+    });
+
     return new Response(JSON.stringify({ ok: true, status: 'confirmed', oil_balance: newOil }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (err) {
+    const clientInfo = extractClientInfo(req);
+    logSecurityEvent({
+      event_type: 'purchase_failed',
+      severity: 'warning',
+      action: 'oil_purchase_confirm',
+      details: { error: (err as Error).message },
+      ...clientInfo,
+    });
     return new Response(JSON.stringify({ error: (err as Error).message }), {
       status: 400,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
