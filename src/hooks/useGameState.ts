@@ -46,8 +46,9 @@ export const useGameState = () => {
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
 
-  // Prevent concurrent fetches
+  // Prevent concurrent refreshes while a mutation is in-flight (avoids UI lag + DB row lock contention).
   const isFetchingRef = useRef(false);
+  const isMutatingRef = useRef(false);
   const initialFetchDoneRef = useRef(false);
 
   const handleAuthFailure = (message: string) => {
@@ -62,6 +63,8 @@ export const useGameState = () => {
   const refresh = useCallback(async (showLoading = false) => {
     // Prevent concurrent refreshes
     if (isFetchingRef.current) return;
+    // Avoid racing refreshes with actions (they touch the same rows).
+    if (isMutatingRef.current) return;
 
     const session = getSession();
     if (!session) {
@@ -138,6 +141,34 @@ export const useGameState = () => {
   }, [refresh]);
 
   const executeAction = useCallback(async (action: string, payload?: Record<string, unknown>) => {
+    if (isMutatingRef.current) {
+      return;
+    }
+    isMutatingRef.current = true;
+
+    // Optimistic UX for start/stop so the game feels instant.
+    const machineId = (payload?.machineId as string | undefined) ?? undefined;
+    const prevMachine = machineId ? machines.find((m) => m.id === machineId) : undefined;
+    const prevIsActive = prevMachine?.isActive;
+    const prevLastProcessedAt = prevMachine?.lastProcessedAt;
+
+    if (machineId && action === 'start_machine') {
+      const nowIso = new Date().toISOString();
+      setMachines((prev) =>
+        prev.map((m) =>
+          m.id === machineId ? { ...m, isActive: true, lastProcessedAt: nowIso } : m
+        )
+      );
+    }
+    if (machineId && action === 'stop_machine') {
+      const nowIso = new Date().toISOString();
+      setMachines((prev) =>
+        prev.map((m) =>
+          m.id === machineId ? { ...m, isActive: false, lastProcessedAt: nowIso } : m
+        )
+      );
+    }
+
     try {
       const result = await gameAction(action, payload);
       if (result?.state) {
@@ -165,13 +196,25 @@ export const useGameState = () => {
       if (handleAuthFailure(message)) {
         return;
       }
+      // Revert optimistic start/stop on failure.
+      if (machineId && (action === 'start_machine' || action === 'stop_machine') && prevMachine) {
+        setMachines((prev) =>
+          prev.map((m) =>
+            m.id === machineId
+              ? { ...m, isActive: Boolean(prevIsActive), lastProcessedAt: prevLastProcessedAt ?? null }
+              : m
+          )
+        );
+      }
       toast({
         title: 'Action Failed',
         description: message,
         variant: 'destructive',
       });
+    } finally {
+      isMutatingRef.current = false;
     }
-  }, [toast]);
+  }, [toast, machines, handleAuthFailure]);
 
   const buyMachine = useCallback((type: MachineType) => executeAction('buy_machine', { machineType: type }), [executeAction]);
   const fuelMachine = useCallback((machineId: string, amount?: number) => executeAction('fuel_machine', { machineId, amount }), [executeAction]);

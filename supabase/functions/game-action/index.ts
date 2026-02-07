@@ -1,6 +1,6 @@
 import { corsHeaders, handleOptions } from '../_shared/cors.ts';
 import { getAdminClient, requireUserId, requireHuman } from '../_shared/supabase.ts';
-import { ensurePlayerState, getGameConfig, getPlayerMachines, processMining, getTankCapacity, getUpgradeCost } from '../_shared/mining.ts';
+import { getGameConfig, getPlayerMachines, processMining, getTankCapacity, getUpgradeCost } from '../_shared/mining.ts';
 
 Deno.serve(async (req) => {
   const preflight = handleOptions(req);
@@ -25,18 +25,8 @@ Deno.serve(async (req) => {
     const admin = getAdminClient();
     const config = await getGameConfig();
 
-    await ensurePlayerState(userId);
-    await processMining(userId);
-
-    const { data: state } = await admin
-      .from('player_state')
-      .select('*')
-      .eq('user_id', userId)
-      .single();
-
-    if (!state) {
-      throw new Error('Player state not found');
-    }
+    const mined = await processMining(userId, { config });
+    const state = mined.state;
 
     const mineralDefaults = Object.fromEntries(
       Object.keys(config.mining.action_rewards.minerals).map((key) => [key, 0])

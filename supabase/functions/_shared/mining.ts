@@ -22,11 +22,13 @@ type PlayerStateRow = {
 
 type MachineRow = {
   id: string;
+  user_id?: string;
   type: string;
   level: number;
   fuel_oil: number;
   is_active: boolean;
   last_processed_at: string | null;
+  action_remainder?: number | null;
 };
 
 const MS_PER_HOUR = 3600 * 1000;
@@ -87,11 +89,14 @@ export async function getPlayerMachines(userId: string): Promise<MachineRow[]> {
   return (data ?? []) as MachineRow[];
 }
 
-export async function processMining(userId: string) {
+export async function processMining(
+  userId: string,
+  opts?: { config?: GameConfig; state?: PlayerStateRow; machines?: MachineRow[] },
+) {
   const admin = getAdminClient();
-  const config = await getGameConfig();
-  const state = await ensurePlayerState(userId);
-  const machines = await getPlayerMachines(userId);
+  const config = opts?.config ?? await getGameConfig();
+  const state = opts?.state ?? await ensurePlayerState(userId);
+  const machines = opts?.machines ?? await getPlayerMachines(userId);
 
   const mineralDefaults = Object.fromEntries(Object.keys(config.mining.action_rewards.minerals).map((key) => [key, 0])) as Record<string, number>;
   const minerals = { ...mineralDefaults, ...(state.minerals || {}) } as Record<string, number>;
@@ -111,16 +116,29 @@ export async function processMining(userId: string) {
   const diamondDrop = config.mining.action_rewards.diamond.drop_rate_per_action;
   const mineralDefs = config.mining.action_rewards.minerals;
 
-  const machineUpdates: { id: string; fuel_oil: number; is_active: boolean; last_processed_at: string | null }[] = [];
+  const machineUpdates: {
+    id: string;
+    user_id: string;
+    type: string;
+    level: number;
+    fuel_oil: number;
+    is_active: boolean;
+    last_processed_at: string | null;
+    action_remainder: number;
+  }[] = [];
 
   for (const machine of machines) {
     if (!machine.is_active) continue;
     if (!machine.last_processed_at) {
       machineUpdates.push({
         id: machine.id,
+        user_id: userId,
+        type: machine.type,
+        level: machine.level,
         fuel_oil: machine.fuel_oil,
         is_active: machine.is_active,
         last_processed_at: new Date(now).toISOString(),
+        action_remainder: Number(machine.action_remainder ?? 0),
       });
       continue;
     }
@@ -142,16 +160,25 @@ export async function processMining(userId: string) {
     if (effectiveHours <= 0) {
       machineUpdates.push({
         id: machine.id,
+        user_id: userId,
+        type: machine.type,
+        level: machine.level,
         fuel_oil: machine.fuel_oil,
         is_active: false,
         last_processed_at: machine.last_processed_at,
+        action_remainder: Number(machine.action_remainder ?? 0),
       });
       continue;
     }
 
-    const actions = Math.floor(effectiveHours * speed);
     const oilUsed = effectiveHours * burn;
     const fuelRemaining = Math.max(0, machine.fuel_oil - oilUsed);
+
+    // Accumulate fractional actions so frequent polling doesn't "burn time" without rewards.
+    const prevRemainder = Number(machine.action_remainder ?? 0);
+    const totalActionProgress = prevRemainder + effectiveHours * speed;
+    const actions = Math.floor(totalActionProgress);
+    const actionRemainder = totalActionProgress - actions; // [0, 1)
 
     if (actions > 0) {
       for (let i = 0; i < actions; i++) {
@@ -174,9 +201,13 @@ export async function processMining(userId: string) {
     const newLast = new Date(last + effectiveHours * MS_PER_HOUR).toISOString();
     machineUpdates.push({
       id: machine.id,
+      user_id: userId,
+      type: machine.type,
+      level: machine.level,
       fuel_oil: fuelRemaining,
       is_active: fuelRemaining > 0,
       last_processed_at: newLast,
+      action_remainder: actionRemainder,
     });
   }
 
@@ -193,15 +224,27 @@ export async function processMining(userId: string) {
     .eq('user_id', userId);
 
   if (machineUpdates.length > 0) {
-    for (const update of machineUpdates) {
-      await admin
-        .from('player_machines')
-        .update(update)
-        .eq('id', update.id);
+    const { error: upsertError } = await admin
+      .from('player_machines')
+      .upsert(machineUpdates, { onConflict: 'id' });
+    if (upsertError) {
+      throw new Error('Failed to update machines');
     }
   }
 
-  const refreshedMachines = await getPlayerMachines(userId);
+  const updatesById = new Map(machineUpdates.map((u) => [u.id, u]));
+  const refreshedMachines = machines.map((m) => {
+    const u = updatesById.get(m.id);
+    return u
+      ? {
+          ...m,
+          fuel_oil: u.fuel_oil,
+          is_active: u.is_active,
+          last_processed_at: u.last_processed_at,
+          action_remainder: u.action_remainder,
+        }
+      : m;
+  });
 
   return { state: { ...state, minerals, oil_balance: oilBalance, diamond_balance: diamondBalance, daily_diamond_count: dailyCount, daily_diamond_reset_at: new Date(resetAt).toISOString() }, machines: refreshedMachines };
 }

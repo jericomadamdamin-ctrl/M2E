@@ -1,6 +1,6 @@
 import { corsHeaders, handleOptions } from '../_shared/cors.ts';
 import { getAdminClient, requireUserId } from '../_shared/supabase.ts';
-import { getGameConfig, processMining, ensurePlayerState } from '../_shared/mining.ts';
+import { getGameConfig, processMining } from '../_shared/mining.ts';
 
 Deno.serve(async (req) => {
   const preflight = handleOptions(req);
@@ -9,10 +9,9 @@ Deno.serve(async (req) => {
   try {
     const userId = await requireUserId(req);
 
-    // Ensure state exists and process mining before returning state
-    await ensurePlayerState(userId);
-    const { state, machines } = await processMining(userId);
     const config = await getGameConfig();
+    // Ensure state exists and process mining before returning state
+    const { state, machines } = await processMining(userId, { config });
 
     const admin = getAdminClient();
     const { data: profile } = await admin
