@@ -136,6 +136,10 @@ const Index = () => {
           />
         )}
 
+        {activeTab === 'leaderboard' && (
+          <LeaderboardTab currentUserId={session.userId} />
+        )}
+
         {activeTab === 'profile' && (
           <ProfileTab
             player={player}
