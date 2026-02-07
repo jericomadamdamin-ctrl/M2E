@@ -137,7 +137,7 @@ export const MiningTab = ({ machines, config, oilBalance, onFuel, onStart, onSto
                       <Button
                         size="sm"
                         variant="destructive"
-                        className="flex-1 h-8 text-xs"
+                        className="flex-1 h-8 text-xs transition-transform active:scale-95"
                         onClick={() => onStop(machine.id)}
                       >
                         <Square className="w-3 h-3 mr-1" />
@@ -147,7 +147,7 @@ export const MiningTab = ({ machines, config, oilBalance, onFuel, onStart, onSto
                       <Button
                         size="sm"
                         variant="default"
-                        className="flex-1 h-8 text-xs glow-green"
+                        className="flex-1 h-8 text-xs glow-green transition-transform active:scale-95"
                         onClick={() => onStart(machine.id)}
                         disabled={machine.fuelOil <= 0}
                       >
@@ -159,7 +159,7 @@ export const MiningTab = ({ machines, config, oilBalance, onFuel, onStart, onSto
                     <Button
                       size="sm"
                       variant="secondary"
-                      className="h-8 text-xs"
+                      className="h-8 text-xs transition-transform active:scale-95"
                       onClick={() => onFuel(machine.id)}
                       disabled={!canFuel}
                     >

@@ -99,6 +99,46 @@ Deno.serve(async (req) => {
       .update({ status: 'confirmed', transaction_id: payload.transaction_id, metadata: tx })
       .eq('id', purchase.id);
 
+    // --- Referral Bonus Logic ---
+    // Check if this user was referred and hasn't paid bonus yet
+    const { data: profile } = await admin
+      .from('profiles')
+      .select('referred_by, referral_bonus_paid')
+      .eq('id', userId)
+      .single();
+
+    if (profile?.referred_by && !profile.referral_bonus_paid) {
+      // Award 1 diamond to the referrer
+      const { data: referrerState } = await admin
+        .from('player_state')
+        .select('diamond_balance')
+        .eq('user_id', profile.referred_by)
+        .single();
+
+      const newDiamonds = Number(referrerState?.diamond_balance || 0) + 1;
+
+      await admin
+        .from('player_state')
+        .update({ diamond_balance: newDiamonds })
+        .eq('user_id', profile.referred_by);
+
+      // Log the referral bonus
+      await admin
+        .from('referral_bonuses')
+        .insert({
+          referrer_id: profile.referred_by,
+          referred_id: userId,
+          diamonds_awarded: 1,
+        });
+
+      // Mark bonus as paid
+      await admin
+        .from('profiles')
+        .update({ referral_bonus_paid: true })
+        .eq('id', userId);
+    }
+    // --- End Referral Bonus Logic ---
+
     return new Response(JSON.stringify({ ok: true, status: 'confirmed', oil_balance: newOil }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

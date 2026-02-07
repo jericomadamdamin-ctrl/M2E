@@ -16,11 +16,23 @@ Deno.serve(async (req) => {
     const admin = getAdminClient();
     const { data: profile } = await admin
       .from('profiles')
-      .select('player_name, is_admin, is_human_verified, wallet_address')
+      .select('player_name, is_admin, is_human_verified, wallet_address, referral_code')
       .eq('id', userId)
       .single();
 
-    return new Response(JSON.stringify({ ok: true, config, state, machines, profile }), {
+    // Count successful referrals
+    const { count: referralCount } = await admin
+      .from('referral_bonuses')
+      .select('*', { count: 'exact', head: true })
+      .eq('referrer_id', userId);
+
+    return new Response(JSON.stringify({
+      ok: true,
+      config,
+      state,
+      machines,
+      profile: profile ? { ...profile, referral_count: referralCount || 0 } : null
+    }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (err) {

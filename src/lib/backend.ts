@@ -92,9 +92,9 @@ async function handleFunctionError(error: any): Promise<never> {
   throw new Error(message);
 }
 
-export async function completeWalletAuth(payload: unknown, nonce: string, playerName?: string, username?: string) {
+export async function completeWalletAuth(payload: unknown, nonce: string, playerName?: string, username?: string, referralCode?: string) {
   const { data, error } = await supabase.functions.invoke('auth-complete', {
-    body: { payload, nonce, player_name: playerName, username },
+    body: { payload, nonce, player_name: playerName, username, referral_code: referralCode },
   });
   if (error) await handleFunctionError(error);
   return data as {

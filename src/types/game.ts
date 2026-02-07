@@ -70,6 +70,8 @@ export interface GameStateResponse {
     is_admin?: boolean;
     is_human_verified?: boolean;
     wallet_address?: string | null;
+    referral_code?: string | null;
+    referral_count?: number;
   };
   state: {
     oil_balance: number;

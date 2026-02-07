@@ -17,6 +17,7 @@ type AuthStep = 'signin' | 'profile';
 const Auth = () => {
   const [step, setStep] = useState<AuthStep>('signin');
   const [playerName, setPlayerName] = useState('');
+  const [referralCode, setReferralCode] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -68,7 +69,7 @@ const Auth = () => {
       }
 
       // Do not send playerName yet. We want to check if they exist.
-      const result = await completeWalletAuth(finalPayload, nonce, undefined, username);
+      const result = await completeWalletAuth(finalPayload, nonce, undefined, username, referralCode || undefined);
 
       setSession({
         token: result.session.token,
@@ -171,6 +172,21 @@ const Auth = () => {
               <p className="text-sm text-muted-foreground">
                 Connect using your World ID credentials.
               </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="referralCode" className="text-xs text-muted-foreground">
+                Referral Code (optional)
+              </Label>
+              <Input
+                id="referralCode"
+                type="text"
+                value={referralCode}
+                onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
+                placeholder="Enter referral code"
+                maxLength={8}
+                className="bg-secondary/50 uppercase"
+              />
             </div>
 
             <Button type="submit" className="w-full glow-green" disabled={loading}>

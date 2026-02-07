@@ -1,5 +1,5 @@
 import { Machine, PlayerState, MINERAL_LABELS, MineralType, GameConfig } from '@/types/game';
-import { Settings, Gem, User, Shield } from 'lucide-react';
+import { Settings, Gem, User, Shield, Copy, Users } from 'lucide-react';
 import { MineralIcon } from './MineralIcon';
 import { useEffect, useState } from 'react';
 import { Input } from '@/components/ui/input';
@@ -13,9 +13,11 @@ interface ProfileTabProps {
   config: GameConfig | null;
   isAdmin: boolean;
   playerName: string;
+  referralCode?: string;
+  referralCount?: number;
 }
 
-export const ProfileTab = ({ player, machines, config, isAdmin, playerName }: ProfileTabProps) => {
+export const ProfileTab = ({ player, machines, config, isAdmin, playerName, referralCode, referralCount = 0 }: ProfileTabProps) => {
   const totalMinerals = Object.values(player.minerals).reduce((a, b) => a + b, 0);
   const { toast } = useToast();
 
@@ -92,6 +94,39 @@ export const ProfileTab = ({ player, machines, config, isAdmin, playerName }: Pr
         </div>
       </div>
 
+      {/* Referral Program */}
+      {referralCode && (
+        <div className="card-game rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Users className="w-4 h-4 text-primary" />
+            <span className="font-bold text-sm">Referral Program</span>
+            <span className="ml-auto text-xs text-muted-foreground">
+              💎 1 Diamond per referral
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="flex-1 bg-secondary/50 rounded-lg px-3 py-2 font-mono text-lg tracking-widest text-center text-primary">
+              {referralCode}
+            </div>
+            <Button
+              size="sm"
+              variant="secondary"
+              className="h-9 transition-transform active:scale-95"
+              onClick={() => {
+                navigator.clipboard.writeText(referralCode);
+                toast({ title: 'Copied!', description: 'Referral code copied to clipboard.' });
+              }}
+            >
+              <Copy className="w-4 h-4" />
+            </Button>
+          </div>
+          <div className="mt-3 text-center">
+            <span className="text-xs text-muted-foreground">Successful referrals: </span>
+            <span className="font-bold text-primary">{referralCount}</span>
+          </div>
+        </div>
+      )}
+
       {/* Minerals */}
       <div className="card-game rounded-xl p-4">
         <div className="flex items-center gap-2 mb-3">
@@ -136,8 +171,8 @@ export const ProfileTab = ({ player, machines, config, isAdmin, playerName }: Pr
                   </div>
                 </div>
                 <div className={`px-2 py-0.5 rounded text-xs font-bold ${machine.isActive
-                    ? 'bg-primary/20 text-primary'
-                    : 'bg-muted text-muted-foreground'
+                  ? 'bg-primary/20 text-primary'
+                  : 'bg-muted text-muted-foreground'
                   }`}>
                   {machine.isActive ? 'ACTIVE' : 'IDLE'}
                 </div>

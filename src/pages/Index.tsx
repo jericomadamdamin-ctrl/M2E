@@ -147,6 +147,8 @@ const Index = () => {
             config={config}
             isAdmin={Boolean(profile?.isAdmin)}
             playerName={profile?.playerName || 'Miner'}
+            referralCode={profile?.referralCode || undefined}
+            referralCount={profile?.referralCount || 0}
           />
         )}
       </main>

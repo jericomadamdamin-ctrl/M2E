@@ -12,6 +12,7 @@ interface CompleteRequest {
   nonce: string;
   player_name?: string;
   username?: string;
+  referral_code?: string;
 }
 
 Deno.serve(async (req) => {
@@ -26,7 +27,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { payload, nonce, player_name, username } = (await req.json()) as CompleteRequest;
+    const { payload, nonce, player_name, username, referral_code } = (await req.json()) as CompleteRequest;
     if (!payload || !nonce) {
       throw new Error('Missing payload or nonce');
     }
@@ -129,12 +130,26 @@ Deno.serve(async (req) => {
 
       const resolvedName = player_name || username || 'Miner';
 
+      // Look up referrer by referral_code if provided
+      let referrerId: string | null = null;
+      if (referral_code) {
+        const { data: referrer } = await admin
+          .from('profiles')
+          .select('id')
+          .eq('referral_code', referral_code.toUpperCase())
+          .single();
+        if (referrer && referrer.id !== userId) {
+          referrerId = referrer.id;
+        }
+      }
+
       const { data: createdProfile, error: profileError } = await admin
         .from('profiles')
         .upsert({
           id: userId,
           player_name: resolvedName,
           wallet_address: walletAddress,
+          referred_by: referrerId,
         })
         .select('id, player_name, is_admin, is_human_verified')
         .single();

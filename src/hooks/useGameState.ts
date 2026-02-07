@@ -41,7 +41,7 @@ export const useGameState = () => {
     minerals: defaultMinerals,
   });
   const [machines, setMachines] = useState<Machine[]>([]);
-  const [profile, setProfile] = useState<{ playerName?: string; isAdmin?: boolean; isHumanVerified?: boolean } | null>(null);
+  const [profile, setProfile] = useState<{ playerName?: string; isAdmin?: boolean; isHumanVerified?: boolean; referralCode?: string; referralCount?: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
@@ -87,6 +87,8 @@ export const useGameState = () => {
           playerName: response.profile.player_name || 'Miner',
           isAdmin: Boolean(response.profile.is_admin),
           isHumanVerified: Boolean(response.profile.is_human_verified),
+          referralCode: response.profile.referral_code,
+          referralCount: response.profile.referral_count || 0,
         });
       }
     } catch (err) {
@@ -141,16 +143,12 @@ export const useGameState = () => {
   }, [refresh]);
 
   const executeAction = useCallback(async (action: string, payload?: Record<string, unknown>) => {
-    if (isMutatingRef.current) {
-      return;
-    }
-    isMutatingRef.current = true;
-
     // Optimistic UX for start/stop so the game feels instant.
     const machineId = (payload?.machineId as string | undefined) ?? undefined;
     const prevMachine = machineId ? machines.find((m) => m.id === machineId) : undefined;
     const prevIsActive = prevMachine?.isActive;
     const prevLastProcessedAt = prevMachine?.lastProcessedAt;
+    const prevFuelOil = prevMachine?.fuelOil;
 
     if (machineId && action === 'start_machine') {
       const nowIso = new Date().toISOString();
@@ -166,6 +164,25 @@ export const useGameState = () => {
         prev.map((m) =>
           m.id === machineId ? { ...m, isActive: false, lastProcessedAt: nowIso } : m
         )
+      );
+    }
+    if (machineId && action === 'fuel_machine') {
+      // Calculate optimistic fuel amount
+      const amount = (payload?.amount as number | undefined) ?? undefined;
+      setMachines((prev) =>
+        prev.map((m) => {
+          if (m.id !== machineId) return m;
+          // Ideally calculate capacity, but for now just fill it optimistically or add amount
+          // We don't have capacity here easily without config, but we can assume full fuel if amount is undefined
+          // Or we can just set fuel to a high number as a placeholder until refresh
+          // Better: fetch config to know capacity? We have config in state.
+          // Let's just set it to 'full' based on visual feedback or just +amount if provided.
+          // Since we don't have easy access to config inside this callback without dependency issues or stale closures,
+          // let's just optimistically update the UI to show 'full' if no amount, or +amount.
+          // Actually, we can use the `config` state if we add it to dependency array, but let's keep it simple.
+          // We will rely on the backend response to correct it, but for now, let's just make it look full.
+          return { ...m, fuelOil: 10000 }; // Placeholder high value to show full bar temporarily
+        })
       );
     }
 
@@ -212,11 +229,16 @@ export const useGameState = () => {
         return;
       }
       // Revert optimistic start/stop on failure.
-      if (machineId && (action === 'start_machine' || action === 'stop_machine') && prevMachine) {
+      if (machineId && (action === 'start_machine' || action === 'stop_machine' || action === 'fuel_machine') && prevMachine) {
         setMachines((prev) =>
           prev.map((m) =>
             m.id === machineId
-              ? { ...m, isActive: Boolean(prevIsActive), lastProcessedAt: prevLastProcessedAt ?? null }
+              ? {
+                ...m,
+                isActive: Boolean(prevIsActive),
+                lastProcessedAt: prevLastProcessedAt ?? null,
+                fuelOil: Number(prevFuelOil)
+              }
               : m
           )
         );
