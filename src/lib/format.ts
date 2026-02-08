@@ -5,6 +5,11 @@ export function formatCompactNumber(value: number): string {
   const abs = Math.abs(value);
 
   const units: Array<{ threshold: number; suffix: string }> = [
+    { threshold: 1e27, suffix: 'Oc' },
+    { threshold: 1e24, suffix: 'Sp' },
+    { threshold: 1e21, suffix: 'Sx' },
+    { threshold: 1e18, suffix: 'Qi' },
+    { threshold: 1e15, suffix: 'Qa' },
     { threshold: 1e12, suffix: 'T' },
     { threshold: 1e9, suffix: 'B' },
     { threshold: 1e6, suffix: 'M' },

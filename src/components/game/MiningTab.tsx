@@ -73,7 +73,7 @@ export const MiningTab = ({ machines, config, oilBalance, maxSlots = 10, onFuel,
           )}
           <div className="flex items-center gap-1 bg-secondary/50 px-3 py-1.5 rounded-full">
             <span className="text-game-oil">🛢️</span>
-            <span className="text-sm font-bold tabular-nums">{formatCompactNumber(Math.floor(oilBalance))}</span>
+            <span className="text-sm font-bold tabular-nums max-w-[100px] truncate">{formatCompactNumber(Math.floor(oilBalance))}</span>
           </div>
         </div>
       </div>

@@ -64,7 +64,7 @@ export const GameHeader = ({ player, machines = [], onRefresh }: GameHeaderProps
             title="Tap to view exact OIL"
           >
             <span>🛢️</span>
-            <span className="font-bold tabular-nums">{formatCompactNumber(Math.floor(player.oilBalance))}</span>
+            <span className="font-bold tabular-nums max-w-[80px] truncate">{formatCompactNumber(Math.floor(player.oilBalance))}</span>
           </button>
           <div className="flex items-center gap-1 bg-game-diamond/10 px-2.5 py-1.5 rounded-lg text-xs">
             <span>💎</span>

@@ -26,7 +26,7 @@ export const BankTab = ({
                 <div className="flex gap-2">
                     <div className="flex items-center gap-1 bg-secondary/50 px-2 py-1 rounded-full text-xs">
                         <span>🛢️</span>
-                        <span className="font-bold tabular-nums">{formatCompactNumber(Math.floor(oilBalance))}</span>
+                        <span className="font-bold tabular-nums max-w-[80px] truncate">{formatCompactNumber(Math.floor(oilBalance))}</span>
                     </div>
                     <div className="flex items-center gap-1 bg-secondary/50 px-2 py-1 rounded-full text-xs">
                         <span>💎</span>
