@@ -26,10 +26,15 @@ Deno.serve(async (req) => {
       .select('*', { count: 'exact', head: true })
       .eq('referrer_id', userId);
 
+    // Calculate slot info
+    const slotConfig = (config as any).slots ?? { base_slots: 10, max_total_slots: 30 };
+    const purchasedSlots = Number((state as any).purchased_slots ?? 0);
+    const maxSlots = Math.min(slotConfig.base_slots + purchasedSlots, slotConfig.max_total_slots);
+
     return new Response(JSON.stringify({
       ok: true,
       config,
-      state,
+      state: { ...state, purchased_slots: purchasedSlots, max_slots: maxSlots },
       machines,
       profile: profile ? { ...profile, referral_count: referralCount || 0 } : null
     }), {

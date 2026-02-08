@@ -14,6 +14,8 @@ export interface PlayerState {
   oilBalance: number;
   diamondBalance: number;
   minerals: Record<MineralType, number>;
+  purchasedSlots?: number;
+  maxSlots?: number;
 }
 
 export interface GameConfig {
@@ -61,6 +63,12 @@ export interface GameConfig {
     wld_described_as: string;
     payouts_depend_on_revenue: boolean;
   };
+  slots?: {
+    base_slots: number;
+    slot_pack_size: number;
+    slot_pack_price_wld: number;
+    max_total_slots: number;
+  };
 }
 
 export interface GameStateResponse {
@@ -77,6 +85,8 @@ export interface GameStateResponse {
     oil_balance: number;
     diamond_balance: number;
     minerals: Record<MineralType, number>;
+    purchased_slots?: number;
+    max_slots?: number;
   };
   machines: Array<{
     id: string;

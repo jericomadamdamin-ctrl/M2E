@@ -108,6 +108,7 @@ const Index = () => {
             config={config}
             oilBalance={player.oilBalance}
             machines={machines}
+            maxSlots={player.maxSlots ?? 10}
             onBuy={buyMachine}
           />
         )}

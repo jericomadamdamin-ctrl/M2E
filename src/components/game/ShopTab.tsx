@@ -1,6 +1,6 @@
 import { GameConfig, Machine, MachineType } from '@/types/game';
 import { Button } from '@/components/ui/button';
-import { ShoppingCart, Zap, Clock, Droplet } from 'lucide-react';
+import { ShoppingCart, Zap, Clock, Droplet, Plus } from 'lucide-react';
 import miningMachineIcon from '@/assets/machines/mining-machine.png';
 import heavyMachineIcon from '@/assets/machines/heavy-machine.png';
 import lightMachineIcon from '@/assets/machines/light-machine.png';
@@ -24,19 +24,29 @@ interface ShopTabProps {
   config: GameConfig;
   oilBalance: number;
   machines: Machine[];
+  maxSlots: number;
   onBuy: (type: MachineType) => void;
+  onBuySlots?: () => void;
 }
 
-export const ShopTab = ({ config, oilBalance, machines, onBuy }: ShopTabProps) => {
+export const ShopTab = ({ config, oilBalance, machines, maxSlots, onBuy, onBuySlots }: ShopTabProps) => {
   const getMachineCount = (type: MachineType) => {
     return machines.filter(m => m.type === type).length;
   };
+
+  const atSlotLimit = machines.length >= maxSlots;
+  const slotConfig = config.slots ?? { base_slots: 10, max_total_slots: 30, slot_pack_price_wld: 1, slot_pack_size: 5 };
+  const canBuyMoreSlots = maxSlots < slotConfig.max_total_slots && onBuySlots;
 
   return (
     <div className="space-y-4 pb-4">
       <div className="flex items-center justify-between px-1">
         <h2 className="font-pixel text-xs text-primary text-glow">Machine Shop</h2>
         <div className="flex gap-2">
+          <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs ${atSlotLimit ? 'bg-destructive/20 text-destructive' : 'bg-secondary/50'}`}>
+            <span>🔧</span>
+            <span className="font-bold tabular-nums">{machines.length}/{maxSlots}</span>
+          </div>
           <div className="flex items-center gap-1 bg-secondary/50 px-2 py-1 rounded-full text-xs">
             <span>🛢️</span>
             <span className="font-bold tabular-nums">{formatCompactNumber(Math.floor(oilBalance))}</span>
@@ -44,9 +54,26 @@ export const ShopTab = ({ config, oilBalance, machines, onBuy }: ShopTabProps) =
         </div>
       </div>
 
-      <p className="text-muted-foreground text-xs px-1">
-        Purchase mining machines to start earning minerals.
-      </p>
+      {atSlotLimit ? (
+        <div className="card-game rounded-xl p-4 border-2 border-destructive/50 bg-destructive/5">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-bold text-destructive">Slot Limit Reached!</p>
+              <p className="text-xs text-muted-foreground">Purchase more slots to buy machines.</p>
+            </div>
+            {canBuyMoreSlots && (
+              <Button onClick={onBuySlots} className="glow-green">
+                <Plus className="w-4 h-4 mr-1" />
+                Buy +{slotConfig.slot_pack_size} Slots
+              </Button>
+            )}
+          </div>
+        </div>
+      ) : (
+        <p className="text-muted-foreground text-xs px-1">
+          Purchase mining machines to start earning minerals.
+        </p>
+      )}
 
       <div className="grid gap-4">
         {(Object.keys(config.machines) as MachineType[])
@@ -54,7 +81,7 @@ export const ShopTab = ({ config, oilBalance, machines, onBuy }: ShopTabProps) =
           .map(type => {
             const template = config.machines[type];
             const owned = getMachineCount(type);
-            const canAfford = oilBalance >= template.cost_oil;
+            const canAfford = oilBalance >= template.cost_oil && !atSlotLimit;
 
             return (
               <div
@@ -117,7 +144,7 @@ export const ShopTab = ({ config, oilBalance, machines, onBuy }: ShopTabProps) =
                         className={`${canAfford ? 'glow-green' : ''}`}
                       >
                         <ShoppingCart className="w-4 h-4 mr-2" />
-                        Buy Now
+                        {atSlotLimit ? 'No Slots' : 'Buy Now'}
                       </Button>
                     </div>
                   </div>

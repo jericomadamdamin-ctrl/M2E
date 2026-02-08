@@ -72,6 +72,14 @@ Deno.serve(async (req) => {
       const machineConfig = config.machines[machineType];
       if (!machineConfig) throw new Error('Invalid machine type');
 
+      // Check slot limit
+      const slotConfig = (config as any).slots ?? { base_slots: 10, max_total_slots: 30 };
+      const purchasedSlots = Number((stateRow as any).purchased_slots ?? 0);
+      const maxSlots = Math.min(slotConfig.base_slots + purchasedSlots, slotConfig.max_total_slots);
+      if (machines.length >= maxSlots) {
+        throw new Error(`Machine slot limit reached (${machines.length}/${maxSlots}). Purchase more slots to continue.`);
+      }
+
       const cost = machineConfig.cost_oil;
       if (updatedState.oil_balance < cost) throw new Error('Insufficient OIL');
 

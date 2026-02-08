@@ -18,6 +18,8 @@ const mapState = (response: GameStateResponse) => {
     oilBalance: Number(response.state.oil_balance || 0),
     diamondBalance: Number(response.state.diamond_balance || 0),
     minerals: { ...defaultMinerals, ...(response.state.minerals || {}) },
+    purchasedSlots: Number(response.state.purchased_slots || 0),
+    maxSlots: Number(response.state.max_slots || 10),
   };
 
   const machines: Machine[] = response.machines.map((m) => ({
@@ -53,6 +55,8 @@ export const useGameState = () => {
     oilBalance: 0,
     diamondBalance: 0,
     minerals: defaultMinerals,
+    purchasedSlots: 0,
+    maxSlots: 10,
   });
   const [machines, setMachines] = useState<Machine[]>([]);
   const [profile, setProfile] = useState<{ playerName?: string; isAdmin?: boolean; isHumanVerified?: boolean; referralCode?: string; referralCount?: number } | null>(null);
@@ -285,11 +289,11 @@ export const useGameState = () => {
               prev.map((m) =>
                 m.id === machineId
                   ? {
-                      ...m,
-                      isActive: Boolean(prevIsActive),
-                      lastProcessedAt: prevLastProcessedAt ?? null,
-                      fuelOil: Number(prevFuelOil),
-                    }
+                    ...m,
+                    isActive: Boolean(prevIsActive),
+                    lastProcessedAt: prevLastProcessedAt ?? null,
+                    fuelOil: Number(prevFuelOil),
+                  }
                   : m
               )
             );
@@ -300,9 +304,9 @@ export const useGameState = () => {
               prev.map((m) =>
                 m.id === machineId
                   ? {
-                      ...m,
-                      level: prevMachine.level,
-                    }
+                    ...m,
+                    level: prevMachine.level,
+                  }
                   : m
               )
             );
@@ -325,7 +329,7 @@ export const useGameState = () => {
 
     // Serialize actions to avoid backend contention + out-of-order overwrites.
     const queued = actionQueueRef.current.then(runAction, runAction);
-    actionQueueRef.current = queued.catch(() => {});
+    actionQueueRef.current = queued.catch(() => { });
     return queued;
   }, [toast, handleAuthFailure]);
 
