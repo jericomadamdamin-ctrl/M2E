@@ -65,11 +65,27 @@ export async function requireAdmin(userId: string) {
   const admin = getAdminClient();
   const { data, error } = await admin
     .from('profiles')
-    .select('is_admin')
+    .select('is_admin, wallet_address')
     .eq('id', userId)
     .single();
+
   if (error || !data?.is_admin) {
     throw new Error('Admin privileges required');
+  }
+
+  const allowedWallet = Deno.env.get('ADMIN_WALLET_ADDRESS');
+  if (allowedWallet && (!data.wallet_address || data.wallet_address.toLowerCase() !== allowedWallet.toLowerCase())) {
+    throw new Error('Unauthorized admin wallet');
+  }
+}
+
+export function requireAdminKey(req: Request) {
+  const requiredKey = Deno.env.get('ADMIN_ACCESS_KEY');
+  if (requiredKey) {
+    const providedKey = req.headers.get('x-admin-key');
+    if (providedKey !== requiredKey) {
+      throw new Error('Invalid admin access key');
+    }
   }
 }
 

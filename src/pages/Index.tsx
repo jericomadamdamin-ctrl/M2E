@@ -11,6 +11,7 @@ import { MarketTab } from '@/components/game/MarketTab';
 import { ProfileTab } from '@/components/game/ProfileTab';
 import { LeaderboardTab } from '@/components/game/LeaderboardTab';
 import { HumanGate } from '@/components/game/HumanGate';
+import { AdminTab } from '@/components/game/AdminTab';
 import miningBg from '@/assets/mining-bg.jpg';
 import { Loader2 } from 'lucide-react';
 
@@ -156,6 +157,10 @@ const Index = () => {
             referralCount={profile?.referralCount || 0}
           />
         )}
+
+        {activeTab === 'admin' && profile?.isAdmin && (
+          <AdminTab />
+        )}
       </main>
 
       <BottomNav
@@ -163,6 +168,7 @@ const Index = () => {
         onTabChange={setActiveTab}
         machineCount={machines.length}
         isGameReady={isGameReady}
+        isAdmin={Boolean(profile?.isAdmin)}
       />
     </div>
   );

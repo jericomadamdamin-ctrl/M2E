@@ -1,15 +1,16 @@
 import { Pickaxe, ShoppingBag, TrendingUp, User, Crown, Wallet, CreditCard } from 'lucide-react';
 
-export type TabType = 'mining' | 'shop' | 'market' | 'bank' | 'leaderboard' | 'profile';
+export type TabType = 'mining' | 'shop' | 'market' | 'bank' | 'leaderboard' | 'profile' | 'admin';
 
 interface BottomNavProps {
   activeTab: TabType;
   onTabChange: (tab: TabType) => void;
   machineCount: number;
   isGameReady?: boolean;
+  isAdmin?: boolean;
 }
 
-export const BottomNav = ({ activeTab, onTabChange, machineCount, isGameReady = true }: BottomNavProps) => {
+export const BottomNav = ({ activeTab, onTabChange, machineCount, isGameReady = true, isAdmin = false }: BottomNavProps) => {
   const tabs = [
     { id: 'mining' as TabType, icon: Pickaxe, label: 'Mining', badge: machineCount > 0 ? machineCount : undefined },
     { id: 'shop' as TabType, icon: ShoppingBag, label: 'Shop' },
@@ -18,6 +19,10 @@ export const BottomNav = ({ activeTab, onTabChange, machineCount, isGameReady = 
     { id: 'leaderboard' as TabType, icon: Crown, label: 'Ranks' },
     { id: 'profile' as TabType, icon: User, label: 'Profile' },
   ];
+
+  if (isAdmin) {
+    tabs.push({ id: 'admin' as TabType, icon: CreditCard, label: 'Game Master' });
+  }
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50">

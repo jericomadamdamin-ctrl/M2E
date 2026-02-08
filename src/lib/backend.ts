@@ -189,3 +189,43 @@ export async function confirmSlotPurchase(payload: unknown) {
   if (error) await handleFunctionError(error);
   return data as { ok: boolean; slots_added: number };
 }
+
+export async function fetchAdminStats(accessKey?: string) {
+  const headers = authHeaders();
+  if (accessKey) headers['x-admin-key'] = accessKey;
+
+  const { data, error } = await supabase.functions.invoke('admin-stats', {
+    headers,
+  });
+  if (error) await handleFunctionError(error);
+  // biome-ignore lint/suspicious/noExplicitAny: Admin stats type
+  return data as {
+    open_rounds: any[];
+    execution_rounds: any[];
+  };
+}
+
+export async function processCashoutRound(roundId: string, accessKey?: string) {
+  const headers = authHeaders();
+  if (accessKey) headers['x-admin-key'] = accessKey;
+
+  const { data, error } = await supabase.functions.invoke('cashout-process', {
+    headers,
+    body: { round_id: roundId },
+  });
+  if (error) await handleFunctionError(error);
+  return data as { ok: boolean; total_diamonds: number; payout_pool: number };
+}
+
+export async function executeCashoutPayouts(roundId: string, accessKey?: string) {
+  const headers = authHeaders();
+  if (accessKey) headers['x-admin-key'] = accessKey;
+
+  const { data, error } = await supabase.functions.invoke('cashout-execute', {
+    headers,
+    body: { round_id: roundId },
+  });
+  if (error) await handleFunctionError(error);
+  // biome-ignore lint/suspicious/noExplicitAny: Payout results
+  return data as { ok: boolean; results: any[] };
+}
