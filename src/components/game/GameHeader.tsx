@@ -1,6 +1,8 @@
 import { Machine, PlayerState } from '@/types/game';
 import { Pickaxe, RefreshCw } from 'lucide-react';
 import { useState } from 'react';
+import { formatCompactNumber, formatExactNumber } from '@/lib/format';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 interface GameHeaderProps {
   player: PlayerState;
@@ -11,6 +13,7 @@ interface GameHeaderProps {
 export const GameHeader = ({ player, machines = [], onRefresh }: GameHeaderProps) => {
   const runningMachines = machines.filter(m => m.isActive).length;
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [oilOpen, setOilOpen] = useState(false);
 
   const handleRefresh = async () => {
     if (!onRefresh || isRefreshing) return;
@@ -53,10 +56,16 @@ export const GameHeader = ({ player, machines = [], onRefresh }: GameHeaderProps
               <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
             </button>
           )}
-          <div className="flex items-center gap-1 bg-secondary/50 px-2.5 py-1.5 rounded-lg text-xs">
+          <button
+            type="button"
+            onClick={() => setOilOpen(true)}
+            className="flex items-center gap-1 bg-secondary/50 px-2.5 py-1.5 rounded-lg text-xs hover:bg-secondary/70 transition-colors"
+            aria-label="View exact OIL balance"
+            title="Tap to view exact OIL"
+          >
             <span>🛢️</span>
-            <span className="font-bold">{Math.floor(player.oilBalance)}</span>
-          </div>
+            <span className="font-bold tabular-nums">{formatCompactNumber(Math.floor(player.oilBalance))}</span>
+          </button>
           <div className="flex items-center gap-1 bg-game-diamond/10 px-2.5 py-1.5 rounded-lg text-xs">
             <span>💎</span>
             <span className="font-bold text-game-diamond">{player.diamondBalance.toFixed(2)}</span>
@@ -69,6 +78,19 @@ export const GameHeader = ({ player, machines = [], onRefresh }: GameHeaderProps
           )}
         </div>
       </div>
+
+      <Dialog open={oilOpen} onOpenChange={setOilOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>OIL Balance</DialogTitle>
+            <DialogDescription>Your exact in-game credit balance.</DialogDescription>
+          </DialogHeader>
+          <div className="rounded-lg bg-secondary/30 px-4 py-3 text-center">
+            <div className="text-xs text-muted-foreground mb-1">Exact</div>
+            <div className="text-2xl font-bold tabular-nums">{formatExactNumber(player.oilBalance)}</div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </header>
   );
 };

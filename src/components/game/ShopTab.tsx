@@ -5,6 +5,7 @@ import miningMachineIcon from '@/assets/machines/mining-machine.png';
 import heavyMachineIcon from '@/assets/machines/heavy-machine.png';
 import lightMachineIcon from '@/assets/machines/light-machine.png';
 import miniMachineIcon from '@/assets/machines/mini-machine.png';
+import { formatCompactNumber } from '@/lib/format';
 
 const getMachineIcon = (type: MachineType) => {
   switch (type) {
@@ -38,7 +39,7 @@ export const ShopTab = ({ config, oilBalance, machines, onBuy }: ShopTabProps) =
         <div className="flex gap-2">
           <div className="flex items-center gap-1 bg-secondary/50 px-2 py-1 rounded-full text-xs">
             <span>🛢️</span>
-            <span className="font-bold">{Math.floor(oilBalance)}</span>
+            <span className="font-bold tabular-nums">{formatCompactNumber(Math.floor(oilBalance))}</span>
           </div>
         </div>
       </div>

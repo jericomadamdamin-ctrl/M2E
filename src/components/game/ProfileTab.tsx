@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { updateConfig } from '@/lib/backend';
 import { useToast } from '@/hooks/use-toast';
+import { formatCompactNumber } from '@/lib/format';
 
 interface ProfileTabProps {
   player: PlayerState;
@@ -84,7 +85,7 @@ export const ProfileTab = ({ player, machines, config, isAdmin, playerName, refe
       <div className="grid grid-cols-2 gap-3">
         <div className="card-game rounded-xl p-4 text-center">
           <div className="text-3xl mb-2">🛢️</div>
-          <div className="font-bold text-xl text-game-oil">{Math.floor(player.oilBalance)}</div>
+          <div className="font-bold text-xl text-game-oil tabular-nums">{formatCompactNumber(Math.floor(player.oilBalance))}</div>
           <div className="text-xs text-muted-foreground">OIL Credits</div>
         </div>
         <div className="card-game rounded-xl p-4 text-center glow-diamond">

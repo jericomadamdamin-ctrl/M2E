@@ -1,7 +1,9 @@
 import { corsHeaders, handleOptions } from '../_shared/cors.ts';
 import { getAdminClient, requireUserId, requireHuman } from '../_shared/supabase.ts';
-import { getGameConfig, getPlayerMachines, processMining, getTankCapacity, getUpgradeCost } from '../_shared/mining.ts';
+import { ensurePlayerState, getGameConfig, getPlayerMachines, processMining, getTankCapacity, getUpgradeCost } from '../_shared/mining.ts';
 import { logSecurityEvent, extractClientInfo, checkRateLimit, isFeatureEnabled, validateRange } from '../_shared/security.ts';
+
+type MachineRow = Awaited<ReturnType<typeof processMining>>['machines'][number];
 
 Deno.serve(async (req) => {
   const preflight = handleOptions(req);
@@ -47,8 +49,12 @@ Deno.serve(async (req) => {
     const admin = getAdminClient();
     const config = await getGameConfig();
 
-    const mined = await processMining(userId, { config });
+    // Fetch state/machines once, process mining, then perform the action in-memory to avoid extra round-trips.
+    const stateRow = await ensurePlayerState(userId);
+    const machinesRow = await getPlayerMachines(userId);
+    const mined = await processMining(userId, { config, state: stateRow, machines: machinesRow });
     const state = mined.state;
+    let machines: MachineRow[] = mined.machines as MachineRow[];
 
     const mineralDefaults = Object.fromEntries(
       Object.keys(config.mining.action_rewards.minerals).map((key) => [key, 0])
@@ -56,6 +62,10 @@ Deno.serve(async (req) => {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const updatedState = { ...state, minerals: { ...mineralDefaults, ...(state.minerals || {}) } } as any;
+
+    const patchMachine = (machineId: string, patch: Partial<MachineRow>) => {
+      machines = machines.map((m) => (m.id === machineId ? { ...m, ...patch } : m));
+    };
 
     if (action === 'buy_machine') {
       const machineType = payload?.machineType as string;
@@ -65,7 +75,7 @@ Deno.serve(async (req) => {
       const cost = machineConfig.cost_oil;
       if (updatedState.oil_balance < cost) throw new Error('Insufficient OIL');
 
-      const { error: insertError } = await admin
+      const { data: insertedMachine, error: insertError } = await admin
         .from('player_machines')
         .insert({
           user_id: userId,
@@ -74,23 +84,23 @@ Deno.serve(async (req) => {
           fuel_oil: 0,
           is_active: false,
           last_processed_at: null,
-        });
+        })
+        .select('*')
+        .single();
 
       if (insertError) throw insertError;
+      if (insertedMachine) {
+        machines = [...machines, insertedMachine as MachineRow];
+      }
 
       updatedState.oil_balance = Number(updatedState.oil_balance) - cost;
     }
 
     if (action === 'fuel_machine') {
       const machineId = payload?.machineId as string;
-      const { data: machine, error: machineError } = await admin
-        .from('player_machines')
-        .select('*')
-        .eq('id', machineId)
-        .eq('user_id', userId)
-        .single();
+      const machine = machines.find((m) => m.id === machineId);
 
-      if (machineError || !machine) throw new Error('Machine not found');
+      if (!machine) throw new Error('Machine not found');
 
       const capacity = getTankCapacity(config, machine.type, machine.level);
       const needed = Math.max(0, capacity - Number(machine.fuel_oil));
@@ -102,48 +112,45 @@ Deno.serve(async (req) => {
       const { error: updateError } = await admin
         .from('player_machines')
         .update({ fuel_oil: Number(machine.fuel_oil) + fillAmount })
-        .eq('id', machineId);
+        .eq('id', machineId)
+        .eq('user_id', userId);
 
       if (updateError) throw updateError;
+      patchMachine(machineId, { fuel_oil: Number(machine.fuel_oil) + fillAmount });
 
       updatedState.oil_balance = Number(updatedState.oil_balance) - fillAmount;
     }
 
     if (action === 'start_machine') {
       const machineId = payload?.machineId as string;
-      const { data: machine } = await admin
-        .from('player_machines')
-        .select('*')
-        .eq('id', machineId)
-        .eq('user_id', userId)
-        .single();
+      const machine = machines.find((m) => m.id === machineId);
 
       if (!machine) throw new Error('Machine not found');
       if (Number(machine.fuel_oil) <= 0) throw new Error('Machine has no fuel');
 
+      const nowIso = new Date().toISOString();
       await admin
         .from('player_machines')
-        .update({ is_active: true, last_processed_at: new Date().toISOString() })
-        .eq('id', machineId);
+        .update({ is_active: true, last_processed_at: nowIso })
+        .eq('id', machineId)
+        .eq('user_id', userId);
+      patchMachine(machineId, { is_active: true, last_processed_at: nowIso });
     }
 
     if (action === 'stop_machine') {
       const machineId = payload?.machineId as string;
+      const nowIso = new Date().toISOString();
       await admin
         .from('player_machines')
-        .update({ is_active: false, last_processed_at: new Date().toISOString() })
+        .update({ is_active: false, last_processed_at: nowIso })
         .eq('id', machineId)
         .eq('user_id', userId);
+      patchMachine(machineId, { is_active: false, last_processed_at: nowIso });
     }
 
     if (action === 'upgrade_machine') {
       const machineId = payload?.machineId as string;
-      const { data: machine } = await admin
-        .from('player_machines')
-        .select('*')
-        .eq('id', machineId)
-        .eq('user_id', userId)
-        .single();
+      const machine = machines.find((m) => m.id === machineId);
 
       if (!machine) throw new Error('Machine not found');
       const machineConfig = config.machines[machine.type];
@@ -156,7 +163,9 @@ Deno.serve(async (req) => {
       await admin
         .from('player_machines')
         .update({ level: machine.level + 1 })
-        .eq('id', machineId);
+        .eq('id', machineId)
+        .eq('user_id', userId);
+      patchMachine(machineId, { level: machine.level + 1 });
 
       updatedState.oil_balance = Number(updatedState.oil_balance) - cost;
     }
@@ -184,8 +193,6 @@ Deno.serve(async (req) => {
         diamond_balance: updatedState.diamond_balance,
       })
       .eq('user_id', userId);
-
-    const machines = await getPlayerMachines(userId);
 
     // Log successful game action
     logSecurityEvent({

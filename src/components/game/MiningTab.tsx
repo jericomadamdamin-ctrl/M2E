@@ -7,6 +7,7 @@ import miningMachineIcon from '@/assets/machines/mining-machine.png';
 import heavyMachineIcon from '@/assets/machines/heavy-machine.png';
 import lightMachineIcon from '@/assets/machines/light-machine.png';
 import miniMachineIcon from '@/assets/machines/mini-machine.png';
+import { formatCompactNumber } from '@/lib/format';
 
 interface MiningTabProps {
   machines: Machine[];
@@ -60,7 +61,7 @@ export const MiningTab = ({ machines, config, oilBalance, onFuel, onStart, onSto
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1 bg-secondary/50 px-3 py-1.5 rounded-full">
             <span className="text-game-oil">🛢️</span>
-            <span className="text-sm font-bold">{Math.floor(oilBalance)}</span>
+            <span className="text-sm font-bold tabular-nums">{formatCompactNumber(Math.floor(oilBalance))}</span>
           </div>
         </div>
       </div>

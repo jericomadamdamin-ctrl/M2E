@@ -3,6 +3,7 @@ import { GameConfig, MineralType, MINERAL_LABELS } from '@/types/game';
 import { Button } from '@/components/ui/button';
 import { ArrowRight, Sparkles } from 'lucide-react';
 import { MineralIcon } from './MineralIcon';
+import { formatCompactNumber } from '@/lib/format';
 
 interface MarketTabProps {
   config: GameConfig;
@@ -48,7 +49,7 @@ export const MarketTab = ({ config, minerals, oilBalance, onExchange }: MarketTa
         <div className="flex gap-2">
           <div className="flex items-center gap-1 bg-secondary/50 px-2 py-1 rounded-full text-xs">
             <span>🛢️</span>
-            <span className="font-bold">{Math.floor(oilBalance)}</span>
+            <span className="font-bold tabular-nums">{formatCompactNumber(Math.floor(oilBalance))}</span>
           </div>
         </div>
       </div>

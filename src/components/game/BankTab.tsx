@@ -1,11 +1,13 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { OilPurchaseTab } from "./OilPurchaseTab";
 import { CashoutTab } from "./CashoutTab";
+import { formatCompactNumber } from "@/lib/format";
+import { GameConfig } from "@/types/game";
 
 interface BankTabProps {
     oilBalance: number;
     diamondBalance: number;
-    config: any;
+    config: GameConfig;
     defaultOil?: number;
     onPurchaseComplete?: (newBalance?: number) => void;
 }
@@ -24,7 +26,7 @@ export const BankTab = ({
                 <div className="flex gap-2">
                     <div className="flex items-center gap-1 bg-secondary/50 px-2 py-1 rounded-full text-xs">
                         <span>🛢️</span>
-                        <span className="font-bold">{Math.floor(oilBalance)}</span>
+                        <span className="font-bold tabular-nums">{formatCompactNumber(Math.floor(oilBalance))}</span>
                     </div>
                     <div className="flex items-center gap-1 bg-secondary/50 px-2 py-1 rounded-full text-xs">
                         <span>💎</span>

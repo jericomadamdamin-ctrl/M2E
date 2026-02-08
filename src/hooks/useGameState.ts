@@ -32,6 +32,20 @@ const mapState = (response: GameStateResponse) => {
   return { state, machines, config: response.config };
 };
 
+const getMultiplier = (base: number, level: number, perLevel: number) => {
+  return base * (1 + Math.max(0, level - 1) * perLevel);
+};
+
+const getTankCapacity = (config: GameConfig, type: MachineType, level: number) => {
+  const def = config.machines[type];
+  return getMultiplier(def.tank_capacity, level, config.progression.level_capacity_multiplier);
+};
+
+const getUpgradeCost = (config: GameConfig, type: MachineType, level: number) => {
+  const def = config.machines[type];
+  return Math.floor(def.cost_oil * level * config.progression.upgrade_cost_multiplier);
+};
+
 export const useGameState = () => {
   const navigate = useNavigate();
   const [config, setConfig] = useState<GameConfig | null>(null);
@@ -50,15 +64,33 @@ export const useGameState = () => {
   const isFetchingRef = useRef(false);
   const isMutatingRef = useRef(false);
   const initialFetchDoneRef = useRef(false);
+  const mutationSeqRef = useRef(0);
+  const actionQueueRef = useRef<Promise<void>>(Promise.resolve());
 
-  const handleAuthFailure = (message: string) => {
+  const configRef = useRef<GameConfig | null>(null);
+  const playerRef = useRef<PlayerState>(player);
+  const machinesRef = useRef<Machine[]>(machines);
+
+  useEffect(() => {
+    configRef.current = config;
+  }, [config]);
+
+  useEffect(() => {
+    playerRef.current = player;
+  }, [player]);
+
+  useEffect(() => {
+    machinesRef.current = machines;
+  }, [machines]);
+
+  const handleAuthFailure = useCallback((message: string) => {
     if (/session expired|invalid session token|missing authorization|missing app session token/i.test(message)) {
       clearSession();
       navigate('/auth', { replace: true });
       return true;
     }
     return false;
-  };
+  }, [navigate]);
 
   const refresh = useCallback(async (showLoading = false, force = false) => {
     // Prevent concurrent refreshes unless forced
@@ -73,11 +105,14 @@ export const useGameState = () => {
     }
 
     isFetchingRef.current = true;
+    const mutationSeqAtStart = mutationSeqRef.current;
     if (showLoading) setLoading(true);
     setError(null);
 
     try {
       const response = await fetchGameState();
+      // If a mutation started while this refresh was in-flight, ignore the result to avoid stale overwrites.
+      if (mutationSeqAtStart !== mutationSeqRef.current) return;
       const mapped = mapState(response);
       setConfig(mapped.config);
       setPlayer(mapped.state);
@@ -100,7 +135,7 @@ export const useGameState = () => {
       isFetchingRef.current = false;
       setLoading(false);
     }
-  }, []);
+  }, [handleAuthFailure]);
 
   // Initial fetch only - runs once
   useEffect(() => {
@@ -143,115 +178,156 @@ export const useGameState = () => {
   }, [refresh]);
 
   const executeAction = useCallback(async (action: string, payload?: Record<string, unknown>) => {
-    // Optimistic UX for start/stop so the game feels instant.
     const machineId = (payload?.machineId as string | undefined) ?? undefined;
-    const prevMachine = machineId ? machines.find((m) => m.id === machineId) : undefined;
-    const prevIsActive = prevMachine?.isActive;
-    const prevLastProcessedAt = prevMachine?.lastProcessedAt;
-    const prevFuelOil = prevMachine?.fuelOil;
 
-    if (machineId && action === 'start_machine') {
+    const runAction = async () => {
+      isMutatingRef.current = true;
+      mutationSeqRef.current += 1;
+      const prevPlayer = playerRef.current;
+      const prevMachines = machinesRef.current;
+      const prevMachine = machineId ? prevMachines.find((m) => m.id === machineId) : undefined;
+      const prevIsActive = prevMachine?.isActive;
+      const prevLastProcessedAt = prevMachine?.lastProcessedAt;
+      const prevFuelOil = prevMachine?.fuelOil;
+
       const nowIso = new Date().toISOString();
-      setMachines((prev) =>
-        prev.map((m) =>
-          m.id === machineId ? { ...m, isActive: true, lastProcessedAt: nowIso } : m
-        )
-      );
-    }
-    if (machineId && action === 'stop_machine') {
-      const nowIso = new Date().toISOString();
-      setMachines((prev) =>
-        prev.map((m) =>
-          m.id === machineId ? { ...m, isActive: false, lastProcessedAt: nowIso } : m
-        )
-      );
-    }
-    if (machineId && action === 'fuel_machine') {
-      // Calculate optimistic fuel amount
-      const amount = (payload?.amount as number | undefined) ?? undefined;
-      setMachines((prev) =>
-        prev.map((m) => {
-          if (m.id !== machineId) return m;
-          // Ideally calculate capacity, but for now just fill it optimistically or add amount
-          // We don't have capacity here easily without config, but we can assume full fuel if amount is undefined
-          // Or we can just set fuel to a high number as a placeholder until refresh
-          // Better: fetch config to know capacity? We have config in state.
-          // Let's just set it to 'full' based on visual feedback or just +amount if provided.
-          // Since we don't have easy access to config inside this callback without dependency issues or stale closures,
-          // let's just optimistically update the UI to show 'full' if no amount, or +amount.
-          // Actually, we can use the `config` state if we add it to dependency array, but let's keep it simple.
-          // We will rely on the backend response to correct it, but for now, let's just make it look full.
-          return { ...m, fuelOil: 10000 }; // Placeholder high value to show full bar temporarily
-        })
-      );
-    }
 
-    try {
-      const result = await gameAction(action, payload);
-      if (result?.state) {
-        setPlayer((prev) => ({
-          ...prev,
-          oilBalance: Number(result.state.oil_balance ?? prev.oilBalance),
-          diamondBalance: Number(result.state.diamond_balance ?? prev.diamondBalance),
-          minerals: { ...defaultMinerals, ...(result.state.minerals ?? prev.minerals) },
-        }));
-      }
-      if (result?.machines) {
-        setMachines(
-          result.machines.map((m) => ({
-            id: m.id,
-            type: m.type,
-            level: m.level,
-            fuelOil: Number(m.fuel_oil || 0),
-            isActive: Boolean(m.is_active),
-            lastProcessedAt: m.last_processed_at ?? null,
-          }))
-        );
+      // Optimistic UX for common actions so the app feels responsive.
+      if (machineId && action === 'start_machine') {
+        setMachines((prev) => prev.map((m) => (m.id === machineId ? { ...m, isActive: true, lastProcessedAt: nowIso } : m)));
       }
 
-      // Success Toasts
-      if (action === 'buy_machine') {
-        toast({ title: 'Machine Purchased!', description: `You bought a ${payload?.machineType} machine.`, className: 'glow-green' });
-      } else if (action === 'upgrade_machine') {
-        toast({ title: 'Upgrade Complete!', description: 'Machine upgraded successfully.', className: 'glow-green' });
-      } else if (action === 'fuel_machine') {
-        toast({ title: 'Refueled!', description: 'Machine tank refilled.', className: 'glow-green' });
-      } else if (action === 'exchange_minerals') {
-        toast({ title: 'Exchange Successful!', description: 'Minerals exchanged for OIL.', className: 'glow-green' });
-      } else if (action === 'start_machine') {
-        toast({ title: 'Mining Started!', description: 'Machine is now active.', className: 'glow-green' });
-      } else if (action === 'stop_machine') {
-        toast({ title: 'Mining Stopped', description: 'Machine halted.' });
+      if (machineId && action === 'stop_machine') {
+        setMachines((prev) => prev.map((m) => (m.id === machineId ? { ...m, isActive: false, lastProcessedAt: nowIso } : m)));
       }
-    } catch (err) {
-      const message = getErrorMessage(err);
-      if (handleAuthFailure(message)) {
-        return;
+
+      let didOptimisticallyChangePlayer = false;
+
+      if (machineId && action === 'fuel_machine') {
+        const cfg = configRef.current;
+        if (cfg && prevMachine) {
+          const capacity = getTankCapacity(cfg, prevMachine.type, prevMachine.level);
+          const needed = Math.max(0, capacity - prevMachine.fuelOil);
+          const rawAmount = payload?.amount;
+          const requested = typeof rawAmount === 'number' ? rawAmount : needed;
+          const fillAmount = Math.min(needed, requested, prevPlayer.oilBalance);
+
+          if (fillAmount > 0) {
+            setMachines((prev) => prev.map((m) => (m.id === machineId ? { ...m, fuelOil: m.fuelOil + fillAmount } : m)));
+            setPlayer((prev) => ({ ...prev, oilBalance: Math.max(0, prev.oilBalance - fillAmount) }));
+            didOptimisticallyChangePlayer = true;
+          }
+        }
       }
-      // Revert optimistic start/stop on failure.
-      if (machineId && (action === 'start_machine' || action === 'stop_machine' || action === 'fuel_machine') && prevMachine) {
-        setMachines((prev) =>
-          prev.map((m) =>
-            m.id === machineId
-              ? {
-                ...m,
-                isActive: Boolean(prevIsActive),
-                lastProcessedAt: prevLastProcessedAt ?? null,
-                fuelOil: Number(prevFuelOil)
-              }
-              : m
-          )
-        );
+
+      if (machineId && action === 'upgrade_machine') {
+        const cfg = configRef.current;
+        if (cfg && prevMachine) {
+          const maxLevel = cfg.machines[prevMachine.type].max_level;
+          if (prevMachine.level < maxLevel) {
+            const cost = getUpgradeCost(cfg, prevMachine.type, prevMachine.level);
+            if (prevPlayer.oilBalance >= cost) {
+              setMachines((prev) => prev.map((m) => (m.id === machineId ? { ...m, level: m.level + 1 } : m)));
+              setPlayer((prev) => ({ ...prev, oilBalance: Math.max(0, prev.oilBalance - cost) }));
+              didOptimisticallyChangePlayer = true;
+            }
+          }
+        }
       }
-      toast({
-        title: 'Action Failed',
-        description: message,
-        variant: 'destructive',
-      });
-    } finally {
-      isMutatingRef.current = false;
-    }
-  }, [toast, machines, handleAuthFailure]);
+
+      try {
+        const result = await gameAction(action, payload);
+
+        if (result?.state) {
+          setPlayer((prev) => ({
+            ...prev,
+            oilBalance: Number(result.state.oil_balance ?? prev.oilBalance),
+            diamondBalance: Number(result.state.diamond_balance ?? prev.diamondBalance),
+            minerals: { ...defaultMinerals, ...(result.state.minerals ?? prev.minerals) },
+          }));
+        }
+
+        if (result?.machines) {
+          setMachines(
+            result.machines.map((m) => ({
+              id: m.id,
+              type: m.type,
+              level: m.level,
+              fuelOil: Number(m.fuel_oil || 0),
+              isActive: Boolean(m.is_active),
+              lastProcessedAt: m.last_processed_at ?? null,
+            }))
+          );
+        }
+
+        // Success Toasts
+        if (action === 'buy_machine') {
+          toast({ title: 'Machine Purchased!', description: `You bought a ${payload?.machineType} machine.`, className: 'glow-green' });
+        } else if (action === 'upgrade_machine') {
+          toast({ title: 'Upgrade Complete!', description: 'Machine upgraded successfully.', className: 'glow-green' });
+        } else if (action === 'fuel_machine') {
+          toast({ title: 'Refueled!', description: 'Machine tank refilled.', className: 'glow-green' });
+        } else if (action === 'exchange_minerals') {
+          toast({ title: 'Exchange Successful!', description: 'Minerals exchanged for OIL.', className: 'glow-green' });
+        } else if (action === 'start_machine') {
+          toast({ title: 'Mining Started!', description: 'Machine is now active.', className: 'glow-green' });
+        } else if (action === 'stop_machine') {
+          toast({ title: 'Mining Stopped', description: 'Machine halted.' });
+        }
+      } catch (err) {
+        const message = getErrorMessage(err);
+        if (handleAuthFailure(message)) return;
+
+        // Revert optimistic changes on failure.
+        if (machineId && prevMachine) {
+          if (action === 'start_machine' || action === 'stop_machine' || action === 'fuel_machine') {
+            setMachines((prev) =>
+              prev.map((m) =>
+                m.id === machineId
+                  ? {
+                      ...m,
+                      isActive: Boolean(prevIsActive),
+                      lastProcessedAt: prevLastProcessedAt ?? null,
+                      fuelOil: Number(prevFuelOil),
+                    }
+                  : m
+              )
+            );
+          }
+
+          if (action === 'upgrade_machine') {
+            setMachines((prev) =>
+              prev.map((m) =>
+                m.id === machineId
+                  ? {
+                      ...m,
+                      level: prevMachine.level,
+                    }
+                  : m
+              )
+            );
+          }
+        }
+
+        if (didOptimisticallyChangePlayer) {
+          setPlayer(prevPlayer);
+        }
+
+        toast({
+          title: 'Action Failed',
+          description: message,
+          variant: 'destructive',
+        });
+      } finally {
+        isMutatingRef.current = false;
+      }
+    };
+
+    // Serialize actions to avoid backend contention + out-of-order overwrites.
+    const queued = actionQueueRef.current.then(runAction, runAction);
+    actionQueueRef.current = queued.catch(() => {});
+    return queued;
+  }, [toast, handleAuthFailure]);
 
   const buyMachine = useCallback((type: MachineType) => executeAction('buy_machine', { machineType: type }), [executeAction]);
   const fuelMachine = useCallback((machineId: string, amount?: number) => executeAction('fuel_machine', { machineId, amount }), [executeAction]);

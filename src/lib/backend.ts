@@ -9,11 +9,20 @@ export const authHeaders = () => {
   return token ? { 'x-app-session': token } : {};
 };
 
+function isEdgeErrorPayload(data: unknown): data is { error: string } {
+  if (!data || typeof data !== 'object') return false;
+  if (!('error' in data)) return false;
+  return typeof (data as { error?: unknown }).error === 'string';
+}
+
 export async function fetchGameState(): Promise<GameStateResponse> {
   const { data, error } = await supabase.functions.invoke('game-state', {
     headers: authHeaders(),
   });
-  if (error) throw error;
+  if (error) await handleFunctionError(error);
+  if (isEdgeErrorPayload(data)) {
+    throw new Error(data.error);
+  }
   return data as GameStateResponse;
 }
 
@@ -22,7 +31,10 @@ export async function gameAction(action: string, payload?: Record<string, unknow
     headers: authHeaders(),
     body: { action, payload },
   });
-  if (error) throw error;
+  if (error) await handleFunctionError(error);
+  if (isEdgeErrorPayload(data)) {
+    throw new Error(data.error);
+  }
   // biome-ignore lint/suspicious/noExplicitAny: Backend response type
   return data as { state: GameStateResponse['state']; machines: GameStateResponse['machines'] };
 }
@@ -31,7 +43,10 @@ export async function fetchConfig() {
   const { data, error } = await supabase.functions.invoke('config-get', {
     headers: authHeaders(),
   });
-  if (error) throw error;
+  if (error) await handleFunctionError(error);
+  if (isEdgeErrorPayload(data)) {
+    throw new Error(data.error);
+  }
   // biome-ignore lint/suspicious/noExplicitAny: Backend response type
   return data as { config: GameStateResponse['config'] };
 }
@@ -41,7 +56,10 @@ export async function updateConfig(updates: Record<string, unknown>) {
     headers: authHeaders(),
     body: { updates },
   });
-  if (error) throw error;
+  if (error) await handleFunctionError(error);
+  if (isEdgeErrorPayload(data)) {
+    throw new Error(data.error);
+  }
   // biome-ignore lint/suspicious/noExplicitAny: Backend response type
   return data as { config: GameStateResponse['config'] };
 }
@@ -51,7 +69,10 @@ export async function requestCashout(diamonds: number) {
     headers: authHeaders(),
     body: { diamonds },
   });
-  if (error) throw error;
+  if (error) await handleFunctionError(error);
+  if (isEdgeErrorPayload(data)) {
+    throw new Error(data.error);
+  }
   return data as { success: boolean; message?: string };
 }
 
@@ -62,17 +83,18 @@ export async function getAuthNonce() {
 }
 
 // Helper to extract error message from Edge Function response
-async function handleFunctionError(error: any): Promise<never> {
+async function handleFunctionError(error: unknown): Promise<never> {
   let message = 'Request to edge function failed';
 
   if (error && typeof error === 'object') {
     // Check if there's a context Response we can parse
-    if ('context' in error && error.context instanceof Response) {
+    const maybeErr = error as { context?: unknown; message?: unknown };
+    if (maybeErr.context instanceof Response) {
       try {
-        const ctx: Response = error.context;
+        const ctx: Response = maybeErr.context;
         const json = await ctx.clone().json().catch(() => null);
-        if (json && typeof json === 'object' && 'error' in json) {
-          message = (json as any).error;
+        if (isEdgeErrorPayload(json)) {
+          message = json.error;
         } else {
           const text = await ctx.clone().text().catch(() => '');
           if (text) {
@@ -82,8 +104,8 @@ async function handleFunctionError(error: any): Promise<never> {
       } catch {
         // ignore parse errors
       }
-    } else if ('message' in error && typeof error.message === 'string') {
-      message = error.message;
+    } else if (typeof maybeErr.message === 'string') {
+      message = maybeErr.message;
     }
   } else if (typeof error === 'string') {
     message = error;
