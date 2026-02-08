@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { fetchGameState, gameAction } from '@/lib/backend';
+import {
+  fetchGameState,
+  gameAction,
+  fetchConfig,
+  updateProfile,
+  authHeaders,
+  initiateSlotPurchase,
+  confirmSlotPurchase,
+} from '@/lib/backend';
+import { MiniKit, Tokens, tokenToDecimals, type PayCommandInput, type PayCommandResult } from '@worldcoin/minikit-js';
+import { ensureMiniKit, getMiniKitErrorMessage } from '@/lib/minikit';
 import { clearSession, getSession } from '@/lib/session';
 import { GameConfig, Machine, PlayerState, GameStateResponse, MachineType, MineralType } from '@/types/game';
 import { useToast } from '@/hooks/use-toast';
@@ -344,6 +354,73 @@ export const useGameState = () => {
     setPlayer(updater);
   }, []);
 
+  const buySlots = async () => {
+    const miniKit = ensureMiniKit();
+    if (!miniKit.ok) {
+      toast({
+        title: 'World App required',
+        description: getMiniKitErrorMessage(miniKit.reason),
+        variant: 'destructive',
+      });
+      return false;
+    }
+
+    setLoading(true);
+    try {
+      const init = await initiateSlotPurchase();
+
+      const payPayload: PayCommandInput = {
+        reference: init.reference,
+        to: init.to_address,
+        tokens: [
+          {
+            symbol: Tokens.WLD,
+            token_amount: tokenToDecimals(init.amount_wld, Tokens.WLD).toString(),
+          },
+        ],
+        description: init.description,
+      };
+
+      const { finalPayload } = await MiniKit.commandsAsync.pay(payPayload) as PayCommandResult;
+
+      if (finalPayload.status !== 'success') {
+        throw new Error('Payment cancelled');
+      }
+
+      const result = await confirmSlotPurchase(finalPayload);
+
+      if (result.ok) {
+        toast({
+          title: 'Slots Purchased!',
+          description: `You bought ${result.slots_added} machine slots.`,
+          className: 'glow-green',
+        });
+
+        // Optimistic update
+        setPlayer((prev) => ({
+          ...prev,
+          purchasedSlots: (prev.purchasedSlots || 0) + result.slots_added,
+          maxSlots: (prev.maxSlots || 10) + result.slots_added,
+        }));
+
+        // Refresh to be sure
+        await refresh(true);
+        return true;
+      } else {
+        throw new Error('Purchase confirmation failed');
+      }
+    } catch (err: any) {
+      toast({
+        title: 'Slot Purchase Failed',
+        description: err?.message || 'Unable to complete purchase',
+        variant: 'destructive',
+      });
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return {
     config,
     player,
@@ -351,13 +428,14 @@ export const useGameState = () => {
     loading,
     error,
     profile,
-    refresh: (force = false) => refresh(true, force),
-    mutateState,
     buyMachine,
     fuelMachine,
     startMachine,
     stopMachine,
     upgradeMachine,
     exchangeMineral,
+    refresh,
+    mutateState: setPlayer,
+    buySlots,
   };
 };

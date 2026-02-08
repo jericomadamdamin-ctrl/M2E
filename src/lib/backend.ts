@@ -163,3 +163,29 @@ export async function updateProfile(updates: { playerName?: string }) {
   if (error) await handleFunctionError(error);
   return data as { ok: boolean };
 }
+
+export async function initiateSlotPurchase() {
+  const { data, error } = await supabase.functions.invoke('slot-purchase-initiate', {
+    headers: authHeaders(),
+    body: {},
+  });
+  if (error) await handleFunctionError(error);
+  return data as {
+    reference: string;
+    slots_to_add: number;
+    amount_wld: number;
+    to_address: string;
+    description: string;
+    current_slots: number;
+    new_max_slots: number;
+  };
+}
+
+export async function confirmSlotPurchase(payload: unknown) {
+  const { data, error } = await supabase.functions.invoke('slot-purchase-confirm', {
+    headers: authHeaders(),
+    body: payload,
+  });
+  if (error) await handleFunctionError(error);
+  return data as { ok: boolean; slots_added: number };
+}

@@ -34,6 +34,7 @@ const Index = () => {
     exchangeMineral,
     refresh,
     mutateState,
+    buySlots,
   } = useGameState();
 
   useEffect(() => {
@@ -100,6 +101,8 @@ const Index = () => {
             onStart={startMachine}
             onStop={stopMachine}
             onUpgrade={upgradeMachine}
+            maxSlots={player.maxSlots ?? 10}
+            onBuySlots={buySlots}
           />
         )}
 
@@ -110,6 +113,7 @@ const Index = () => {
             machines={machines}
             maxSlots={player.maxSlots ?? 10}
             onBuy={buyMachine}
+            onBuySlots={buySlots}
           />
         )}
 

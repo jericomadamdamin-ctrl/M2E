@@ -13,10 +13,12 @@ interface MiningTabProps {
   machines: Machine[];
   config: GameConfig;
   oilBalance: number;
+  maxSlots?: number;
   onFuel: (id: string, amount?: number) => void;
   onStart: (id: string) => void;
   onStop: (id: string) => void;
   onUpgrade: (id: string) => void;
+  onBuySlots?: () => void;
 }
 
 const MACHINE_NAMES: Record<string, string> = {
@@ -43,7 +45,7 @@ const getMultiplier = (base: number, level: number, perLevel: number) => {
   return base * (1 + Math.max(0, level - 1) * perLevel);
 };
 
-export const MiningTab = ({ machines, config, oilBalance, onFuel, onStart, onStop, onUpgrade }: MiningTabProps) => {
+export const MiningTab = ({ machines, config, oilBalance, maxSlots = 10, onFuel, onStart, onStop, onUpgrade, onBuySlots }: MiningTabProps) => {
   const machineStats = useMemo(() => {
     return machines.map(machine => {
       const def = config.machines[machine.type];
@@ -54,17 +56,44 @@ export const MiningTab = ({ machines, config, oilBalance, onFuel, onStart, onSto
     });
   }, [machines, config]);
 
+  const atSlotLimit = machines.length >= maxSlots;
+  const slotConfig = config.slots ?? { base_slots: 10, max_total_slots: 30, slot_pack_price_wld: 1, slot_pack_size: 5 };
+  const canBuyMoreSlots = maxSlots < slotConfig.max_total_slots && onBuySlots;
+
   return (
     <div className="space-y-4 pb-4">
       <div className="flex items-center justify-between px-1">
         <h2 className="font-pixel text-xs text-primary text-glow">Your Machines</h2>
         <div className="flex items-center gap-2">
+          {atSlotLimit && (
+            <div className="flex items-center gap-1 bg-destructive/20 text-destructive px-2 py-1 rounded-full text-xs animate-pulse">
+              <span>🔧</span>
+              <span className="font-bold">{machines.length}/{maxSlots}</span>
+            </div>
+          )}
           <div className="flex items-center gap-1 bg-secondary/50 px-3 py-1.5 rounded-full">
             <span className="text-game-oil">🛢️</span>
             <span className="text-sm font-bold tabular-nums">{formatCompactNumber(Math.floor(oilBalance))}</span>
           </div>
         </div>
       </div>
+
+      {atSlotLimit && (
+        <div className="card-game rounded-xl p-3 border-2 border-destructive/50 bg-destructive/5 mb-2">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold text-destructive">Slot Limit Reached!</p>
+              <p className="text-[10px] text-muted-foreground">Expand capacity to mine more.</p>
+            </div>
+            {canBuyMoreSlots && (
+              <Button onClick={onBuySlots} size="sm" className="h-8 text-xs glow-green shrink-0">
+                <Plus className="w-3 h-3 mr-1" />
+                Buy +{slotConfig.slot_pack_size} Slots
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
 
       {machines.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-full py-16 px-4">
