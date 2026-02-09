@@ -27,7 +27,13 @@ const isMiniKitEnviroment = () => {
     return typeof window !== 'undefined' && (window as any).MiniKit?.isInstalled();
 };
 
-export const AdminTab = () => {
+import { GameConfig } from '@/types/game';
+
+interface AdminTabProps {
+    config: GameConfig | null;
+}
+
+export const AdminTab = ({ config }: AdminTabProps) => {
     const [stats, setStats] = useState<AdminStats | null>(null);
     const [loading, setLoading] = useState(false);
     const [processingId, setProcessingId] = useState<string | null>(null);
@@ -45,7 +51,7 @@ export const AdminTab = () => {
         } catch (err: any) {
             toast({
                 title: 'Access Denied',
-                description: err.message || 'Invalid Access Key',
+                description: `Error: ${err.message}. Ensure your key matches the backend secret.`,
                 variant: 'destructive',
             });
         } finally {
@@ -491,7 +497,11 @@ const GlobalSettings = ({ accessKey }: { accessKey: string }) => {
             toast({ title: 'Setting Updated', description: `${key} saved.`, className: 'glow-green' });
             await loadSettings();
         } catch (err: any) {
-            toast({ title: 'Update Failed', description: err.message, variant: 'destructive' });
+            toast({
+                title: 'Access Denied',
+                description: `Error: ${err.message}. Ensure your key matches the backend secret.`,
+                variant: 'destructive',
+            });
         } finally {
             setLoading(false);
         }
@@ -527,6 +537,99 @@ const GlobalSettings = ({ accessKey }: { accessKey: string }) => {
                             </div>
                         ))}
                     </div>
+                </CardContent>
+            </Card>
+
+            {/* Config Editor from Profile */}
+            {config && <ConfigEditor config={config} accessKey={accessKey} />}
+        </div>
+    );
+};
+
+const ConfigEditor = ({ config, accessKey }: { config: GameConfig, accessKey: string }) => {
+    const { toast } = useToast();
+    const [oilPerWld, setOilPerWld] = useState(config?.pricing.oil_per_wld || 0);
+    const [oilPerUsdc, setOilPerUsdc] = useState(config?.pricing.oil_per_usdc || 0);
+    const [diamondDrop, setDiamondDrop] = useState(config?.mining.action_rewards.diamond.drop_rate_per_action || 0);
+    const [dailyDiamondCap, setDailyDiamondCap] = useState(config?.diamond_controls.daily_cap_per_user || 0);
+    const [treasuryPct, setTreasuryPct] = useState(config?.treasury.payout_percentage || 0);
+    const [cashoutCooldown, setCashoutCooldown] = useState(config?.cashout.cooldown_days || 0);
+    const [saving, setSaving] = useState(false);
+
+    useEffect(() => {
+        if (!config) return;
+        setOilPerWld(config.pricing.oil_per_wld);
+        setOilPerUsdc(config.pricing.oil_per_usdc);
+        setDiamondDrop(config.mining.action_rewards.diamond.drop_rate_per_action);
+        setDailyDiamondCap(config.diamond_controls.daily_cap_per_user);
+        setTreasuryPct(config.treasury.payout_percentage);
+        setCashoutCooldown(config.cashout.cooldown_days);
+    }, [config]);
+
+    const handleSave = async () => {
+        setSaving(true);
+        try {
+            await updateConfig({
+                'pricing.oil_per_wld': oilPerWld,
+                'pricing.oil_per_usdc': oilPerUsdc,
+                'mining.action_rewards.diamond.drop_rate_per_action': diamondDrop,
+                'diamond_controls.daily_cap_per_user': dailyDiamondCap,
+                'treasury.payout_percentage': treasuryPct,
+                'cashout.cooldown_days': cashoutCooldown,
+            });
+            toast({ title: 'Config updated', description: 'Live pricing and controls saved.' });
+        } catch (err) {
+            toast({
+                title: 'Update failed',
+                description: err instanceof Error ? err.message : 'Unable to save admin settings',
+                variant: 'destructive',
+            });
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <div className="space-y-3">
+            <h3 className="font-bold flex items-center gap-2 text-sm uppercase tracking-wider text-muted-foreground">
+                <Settings className="w-4 h-4" /> Live Game Config
+            </h3>
+            <Card className="bg-secondary/20 border-border/50">
+                <CardHeader className="p-4 pb-2 bg-black/20">
+                    <CardTitle className="text-sm text-primary uppercase tracking-wider">Base Configuration</CardTitle>
+                    <CardDescription className="text-[10px]">Updates `game_config` json blob (cached)</CardDescription>
+                </CardHeader>
+                <CardContent className="p-4 space-y-3">
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-[10px] text-muted-foreground font-bold uppercase">OIL per WLD</label>
+                            <Input type="number" value={oilPerWld} onChange={(e) => setOilPerWld(Number(e.target.value))} className="h-8 text-sm bg-black/40" />
+                        </div>
+                        <div>
+                            <label className="text-[10px] text-muted-foreground font-bold uppercase">OIL per USDC</label>
+                            <Input type="number" value={oilPerUsdc} onChange={(e) => setOilPerUsdc(Number(e.target.value))} className="h-8 text-sm bg-black/40" />
+                        </div>
+                        <div>
+                            <label className="text-[10px] text-muted-foreground font-bold uppercase">Diamond Drop Rate</label>
+                            <Input type="number" step="0.001" value={diamondDrop} onChange={(e) => setDiamondDrop(Number(e.target.value))} className="h-8 text-sm bg-black/40" />
+                        </div>
+                        <div>
+                            <label className="text-[10px] text-muted-foreground font-bold uppercase">Daily Diamond Cap</label>
+                            <Input type="number" value={dailyDiamondCap} onChange={(e) => setDailyDiamondCap(Number(e.target.value))} className="h-8 text-sm bg-black/40" />
+                        </div>
+                        <div>
+                            <label className="text-[10px] text-muted-foreground font-bold uppercase">Treasury %</label>
+                            <Input type="number" step="0.01" value={treasuryPct} onChange={(e) => setTreasuryPct(Number(e.target.value))} className="h-8 text-sm bg-black/40" />
+                        </div>
+                        <div>
+                            <label className="text-[10px] text-muted-foreground font-bold uppercase">Cashout Cooldown (Days)</label>
+                            <Input type="number" value={cashoutCooldown} onChange={(e) => setCashoutCooldown(Number(e.target.value))} className="h-8 text-sm bg-black/40" />
+                        </div>
+                    </div>
+                    <Button className="w-full glow-green mt-4" onClick={handleSave} disabled={saving}>
+                        {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
+                        Save Live Config
+                    </Button>
                 </CardContent>
             </Card>
         </div>

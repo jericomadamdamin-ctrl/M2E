@@ -164,7 +164,7 @@ const Index = () => {
         )}
 
         {activeTab === 'admin' && profile?.isAdmin && (
-          <AdminTab />
+          <AdminTab config={config} />
         )}
       </main>
 

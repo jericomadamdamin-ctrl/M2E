@@ -187,46 +187,6 @@ export const ProfileTab = ({ player, machines, config, isAdmin, playerName, refe
         )}
       </div>
 
-      {/* Admin Controls */}
-      {isAdmin && config && (
-        <div className="card-game rounded-xl p-4 border border-accent/40">
-          <div className="flex items-center gap-2 mb-4">
-            <Shield className="w-4 h-4 text-accent" />
-            <span className="font-bold text-sm text-accent">Admin Controls</span>
-          </div>
-
-          <div className="space-y-3">
-            <div>
-              <label className="text-xs text-muted-foreground">OIL per WLD</label>
-              <Input type="number" value={oilPerWld} onChange={(e) => setOilPerWld(Number(e.target.value))} />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">OIL per USDC</label>
-              <Input type="number" value={oilPerUsdc} onChange={(e) => setOilPerUsdc(Number(e.target.value))} />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Diamond Drop Rate (per action)</label>
-              <Input type="number" step="0.001" value={diamondDrop} onChange={(e) => setDiamondDrop(Number(e.target.value))} />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Daily Diamond Cap</label>
-              <Input type="number" value={dailyDiamondCap} onChange={(e) => setDailyDiamondCap(Number(e.target.value))} />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Treasury Payout %</label>
-              <Input type="number" step="0.01" value={treasuryPct} onChange={(e) => setTreasuryPct(Number(e.target.value))} />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Cashout Cooldown (days)</label>
-              <Input type="number" value={cashoutCooldown} onChange={(e) => setCashoutCooldown(Number(e.target.value))} />
-            </div>
-
-            <Button className="w-full glow-green" onClick={handleSave} disabled={saving}>
-              {saving ? 'Saving...' : 'Save Admin Settings'}
-            </Button>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

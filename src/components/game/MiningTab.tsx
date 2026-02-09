@@ -113,7 +113,7 @@ export const MiningTab = ({
           description: "The machine has been permanently removed.",
           variant: "destructive",
         });
-      }, 500);
+      }, 200);
     }
   };
 
