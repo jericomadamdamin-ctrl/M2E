@@ -306,33 +306,25 @@ export const useGameState = () => {
 
         // Revert optimistic changes on failure.
         if (machineId && prevMachine) {
-          if (action === 'start_machine' || action === 'stop_machine' || action === 'fuel_machine') {
-            setMachines((prev) =>
-              prev.map((m) =>
-                m.id === machineId
-                  ? {
-                    ...m,
-                    isActive: Boolean(prevIsActive),
-                    lastProcessedAt: prevLastProcessedAt ?? null,
-                    fuelOil: Number(prevFuelOil),
-                  }
-                  : m
-              )
-            );
-          }
+          setMachines((prev) => {
+            const alreadyExists = prev.find((m) => m.id === machineId);
 
-          if (action === 'upgrade_machine') {
-            setMachines((prev) =>
-              prev.map((m) =>
-                m.id === machineId
-                  ? {
-                    ...m,
-                    level: prevMachine.level,
-                  }
-                  : m
-              )
+            if (action === 'discard_machine' && !alreadyExists) {
+              return [...prev, prevMachine].sort((a, b) => a.id.localeCompare(b.id));
+            }
+
+            return prev.map((m) =>
+              m.id === machineId
+                ? {
+                  ...m,
+                  isActive: Boolean(prevIsActive),
+                  lastProcessedAt: prevLastProcessedAt ?? null,
+                  fuelOil: Number(prevFuelOil),
+                  level: prevMachine.level,
+                }
+                : m
             );
-          }
+          });
         }
 
         if (didOptimisticallyChangePlayer) {
