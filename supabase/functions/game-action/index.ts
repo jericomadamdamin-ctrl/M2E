@@ -191,7 +191,7 @@ Deno.serve(async (req) => {
       updatedState.oil_balance = Number(updatedState.oil_balance) + oilGain;
     }
 
-    if (action === 'recycle_machine') {
+    if (action === 'discard_machine') {
       const machineId = payload?.machineId as string;
       const machine = machines.find((m) => m.id === machineId);
 
@@ -200,16 +200,7 @@ Deno.serve(async (req) => {
       const machineConfig = config.machines[machine.type];
       if (!machineConfig) throw new Error('Invalid machine type');
 
-      // Requirement: Machine must be at MAX LEVEL (10)
-      const maxLevel = machineConfig.max_level || 10;
-      if (machine.level < maxLevel) {
-        throw new Error(`Machine must be at Max Level (${maxLevel}) to recycle.`);
-      }
-
-      // Calculate Refund: 60% of Total Investment (Base + Upgrades)
-      const totalInvestment = getTotalInvestment(config, machine);
-      const refundAmount = Math.floor(totalInvestment * 0.60);
-
+      // Discard Logic: No refund, just delete.
       // 1. Delete the machine
       const { error: deleteError } = await admin
         .from('player_machines')
@@ -219,18 +210,15 @@ Deno.serve(async (req) => {
 
       if (deleteError) throw deleteError;
 
-      // 2. Credit Refund
-      updatedState.oil_balance = Number(updatedState.oil_balance) + refundAmount;
-
       // Remove from memory list so the response is correct
       machines = machines.filter(m => m.id !== machineId);
 
       logSecurityEvent({
-        event_type: 'machine_recycled',
+        event_type: 'machine_discarded',
         user_id: userId,
         severity: 'info',
         action,
-        details: { machineId, type: machine.type, totalInvestment, refundAmount },
+        details: { machineId, type: machine.type, level: machine.level },
       });
     }
 

@@ -9,6 +9,7 @@ type GameConfig = {
   cashout?: { enabled: boolean; minimum_diamonds_required: number; cooldown_days: number };
   treasury?: { payout_percentage: number; treasury_address?: string | null };
   anti_abuse?: { rate_limits?: { cashout_requests_per_day?: number } };
+  referrals?: { bonus_diamonds: number };
 };
 
 type PlayerStateRow = {

@@ -1,5 +1,6 @@
 import { corsHeaders, handleOptions } from '../_shared/cors.ts';
 import { getAdminClient, requireUserId, requireHuman } from '../_shared/supabase.ts';
+import { getGameConfig } from '../_shared/mining.ts';
 import { logSecurityEvent, extractClientInfo, isFeatureEnabled, validateRange } from '../_shared/security.ts';
 
 const DEV_PORTAL_API = 'https://developer.worldcoin.org/api/v2/minikit/transaction';
@@ -119,7 +120,6 @@ Deno.serve(async (req) => {
       .from('oil_purchases')
       .update({ status: 'confirmed', transaction_id: payload.transaction_id, metadata: tx })
       .eq('id', purchase.id);
-
     // --- Referral Bonus Logic ---
     // Check if this user was referred and hasn't paid bonus yet
     const { data: profile } = await admin
@@ -129,14 +129,18 @@ Deno.serve(async (req) => {
       .single();
 
     if (profile?.referred_by && !profile.referral_bonus_paid) {
-      // Award 1 diamond to the referrer
+      // Fetch dynamic config for bonus amount
+      const config = await getGameConfig();
+      const bonusAmount = config.referrals?.bonus_diamonds ?? 0.5;
+
+      // Award bonus diamonds to the referrer
       const { data: referrerState } = await admin
         .from('player_state')
         .select('diamond_balance')
         .eq('user_id', profile.referred_by)
         .single();
 
-      const newDiamonds = Number(referrerState?.diamond_balance || 0) + 0.5;
+      const newDiamonds = Number(referrerState?.diamond_balance || 0) + bonusAmount;
 
       await admin
         .from('player_state')
@@ -149,7 +153,7 @@ Deno.serve(async (req) => {
         .insert({
           referrer_id: profile.referred_by,
           referred_id: userId,
-          diamonds_awarded: 0.5,
+          diamonds_awarded: bonusAmount,
         });
 
       // Mark bonus as paid

@@ -3,8 +3,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { fetchAdminStats, processCashoutRound, executeCashoutPayouts } from '@/lib/backend';
-import { Loader2, AlertTriangle, CheckCircle, Play, DollarSign, Lock } from 'lucide-react';
+import { fetchAdminStats, processCashoutRound, executeCashoutPayouts, fetchConfig, updateConfig } from '@/lib/backend';
+import { Loader2, AlertTriangle, CheckCircle, Play, DollarSign, Lock, Settings, Save } from 'lucide-react';
 import { formatCompactNumber } from '@/lib/format';
 
 interface Round {
@@ -280,6 +280,134 @@ export const AdminTab = () => {
                     ))
                 )}
             </div>
+            {/* Section 3: Global Game Settings */}
+            <GlobalSettings />
+        </div>
+    );
+};
+
+// Sub-component for Global Settings
+const GlobalSettings = () => {
+    const { toast } = useToast();
+    const [loading, setLoading] = useState(false);
+    const [config, setConfig] = useState<any>(null);
+
+    // Form state
+    const [referralBonus, setReferralBonus] = useState('0.5');
+    const [oilPerWld, setOilPerWld] = useState('1000');
+    const [oilPerUsdc, setOilPerUsdc] = useState('1000');
+    const [dailyDiamondCap, setDailyDiamondCap] = useState('1');
+    const [treasuryPercent, setTreasuryPercent] = useState('0.5');
+
+    // Load initial config
+    useEffect(() => {
+        loadConfig();
+    }, []);
+
+    const loadConfig = async () => {
+        try {
+            const { config } = await fetchConfig();
+            setConfig(config);
+            setReferralBonus(String(config.referrals?.bonus_diamonds ?? 0.5));
+            setOilPerWld(String(config.pricing?.oil_per_wld ?? 1000));
+            setOilPerUsdc(String(config.pricing?.oil_per_usdc ?? 1000));
+            setDailyDiamondCap(String(config.diamond_controls?.daily_cap_per_user ?? 1));
+            setTreasuryPercent(String(config.treasury?.payout_percentage ?? 0.5));
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
+    const handleSave = async () => {
+        if (!confirm('Are you sure you want to update global game settings?')) return;
+        setLoading(true);
+        try {
+            const updates = {
+                'referrals.bonus_diamonds': parseFloat(referralBonus),
+                'pricing.oil_per_wld': parseFloat(oilPerWld),
+                'pricing.oil_per_usdc': parseFloat(oilPerUsdc),
+                'diamond_controls.daily_cap_per_user': parseFloat(dailyDiamondCap),
+                'treasury.payout_percentage': parseFloat(treasuryPercent),
+            };
+
+            await updateConfig(updates);
+            toast({ title: 'Config Updated', description: 'Game settings saved successfully.', className: 'glow-green' });
+            await loadConfig(); // Reload to confirm
+        } catch (err: any) {
+            toast({ title: 'Update Failed', description: err.message, variant: 'destructive' });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div className="space-y-3">
+            <h3 className="font-bold flex items-center gap-2 text-sm uppercase tracking-wider text-muted-foreground">
+                <Settings className="w-4 h-4" /> Global Settings
+            </h3>
+            <Card className="bg-secondary/20 border-border/50">
+                <CardHeader className="p-4 pb-2">
+                    <CardTitle className="text-base text-primary">Game Configuration</CardTitle>
+                    <CardDescription className="text-xs">Edit core game parameters live.</CardDescription>
+                </CardHeader>
+                <CardContent className="p-4 space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-muted-foreground">Referral Bonus (💎)</label>
+                            <Input
+                                type="number"
+                                step="0.1"
+                                value={referralBonus}
+                                onChange={(e) => setReferralBonus(e.target.value)}
+                                className="bg-black/20"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-muted-foreground">Avg. Daily Diamond Cap</label>
+                            <Input
+                                type="number"
+                                value={dailyDiamondCap}
+                                onChange={(e) => setDailyDiamondCap(e.target.value)}
+                                className="bg-black/20"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-muted-foreground">Oil per WLD</label>
+                            <Input
+                                type="number"
+                                value={oilPerWld}
+                                onChange={(e) => setOilPerWld(e.target.value)}
+                                className="bg-black/20"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-muted-foreground">Oil per USDC</label>
+                            <Input
+                                type="number"
+                                value={oilPerUsdc}
+                                onChange={(e) => setOilPerUsdc(e.target.value)}
+                                className="bg-black/20"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-muted-foreground">Treasury Payout %</label>
+                            <Input
+                                type="number"
+                                step="0.05"
+                                max="1.0"
+                                value={treasuryPercent}
+                                onChange={(e) => setTreasuryPercent(e.target.value)}
+                                className="bg-black/20"
+                            />
+                        </div>
+                    </div>
+
+                    <Button className="w-full mt-4" onClick={handleSave} disabled={loading}>
+                        {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
+                        Save Changes
+                    </Button>
+                </CardContent>
+            </Card>
         </div>
     );
 };

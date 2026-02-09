@@ -60,6 +60,9 @@ export interface GameConfig {
     payout_percentage: number;
     treasury_address?: string | null;
   };
+  referrals?: {
+    bonus_diamonds: number;
+  };
   player_messaging_rules: {
     no_fixed_roi_promises: boolean;
     diamonds_described_as: string;
