@@ -196,7 +196,7 @@ export const AdminTab = ({ config }: AdminTabProps) => {
                         <CardTitle className="text-sm font-medium text-muted-foreground">Open Rounds</CardTitle>
                     </CardHeader>
                     <CardContent className="p-4 pt-0">
-                        <div className="text-2xl font-bold">{stats?.open_rounds.length || 0}</div>
+                        <div className="text-2xl font-bold">{stats?.open_rounds?.length || 0}</div>
                     </CardContent>
                 </Card>
                 <Card className="bg-secondary/20 border-border/50">
@@ -204,7 +204,7 @@ export const AdminTab = ({ config }: AdminTabProps) => {
                         <CardTitle className="text-sm font-medium text-muted-foreground">Pending Execution</CardTitle>
                     </CardHeader>
                     <CardContent className="p-4 pt-0">
-                        <div className="text-2xl font-bold text-yellow-500">{stats?.execution_rounds.length || 0}</div>
+                        <div className="text-2xl font-bold text-yellow-500">{stats?.execution_rounds?.length || 0}</div>
                     </CardContent>
                 </Card>
             </div>
@@ -215,12 +215,12 @@ export const AdminTab = ({ config }: AdminTabProps) => {
                     <Play className="w-4 h-4" /> Process Rounds (Step 1)
                 </h3>
 
-                {stats?.open_rounds.length === 0 ? (
+                {stats?.open_rounds?.length === 0 ? (
                     <div className="text-center p-6 bg-secondary/10 rounded-xl border border-dashed border-border/50 text-muted-foreground text-sm">
                         No open rounds found.
                     </div>
                 ) : (
-                    stats?.open_rounds.map((round) => (
+                    stats?.open_rounds?.map((round) => (
                         <Card key={round.id} className="bg-secondary/20 border-primary/20">
                             <CardHeader className="p-4">
                                 <div className="flex justify-between items-start">
@@ -264,12 +264,12 @@ export const AdminTab = ({ config }: AdminTabProps) => {
                     <DollarSign className="w-4 h-4" /> Execute Payouts (Step 2)
                 </h3>
 
-                {stats?.execution_rounds.length === 0 ? (
+                {stats?.execution_rounds?.length === 0 ? (
                     <div className="text-center p-6 bg-secondary/10 rounded-xl border border-dashed border-border/50 text-muted-foreground text-sm">
                         No pending payouts.
                     </div>
                 ) : (
-                    stats?.execution_rounds.map((round) => (
+                    stats?.execution_rounds?.map((round) => (
                         <Card key={round.id} className="bg-yellow-500/5 border-yellow-500/20">
                             <CardHeader className="p-4">
                                 <div className="flex justify-between items-start">
@@ -313,6 +313,9 @@ export const AdminTab = ({ config }: AdminTabProps) => {
 
             {/* Section 5: Global Game Settings */}
             <GlobalSettings accessKey={accessKey} />
+
+            {/* Config Editor */}
+            {config && <ConfigEditor config={config} accessKey={accessKey} />}
         </div>
     );
 };
@@ -540,8 +543,6 @@ const GlobalSettings = ({ accessKey }: { accessKey: string }) => {
                 </CardContent>
             </Card>
 
-            {/* Config Editor from Profile */}
-            {config && <ConfigEditor config={config} accessKey={accessKey} />}
         </div>
     );
 };
