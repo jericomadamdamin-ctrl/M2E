@@ -220,6 +220,7 @@ export async function fetchAdminStats(accessKey?: string) {
   if (accessKey) headers['x-admin-key'] = accessKey;
 
   const { data, error } = await supabase.functions.invoke('admin-stats', {
+    method: 'GET',
     headers,
   });
   if (error) await handleFunctionError(error);
@@ -255,20 +256,38 @@ export async function executeCashoutPayouts(roundId: string, accessKey?: string)
   return data as { ok: boolean; results: any[] };
 }
 
-export async function fetchTable(table: string) {
-  const { data, error } = await (supabase as any).from(table).select('*');
-  if (error) throw error;
+export async function fetchTable(table: string, accessKey?: string) {
+  const headers = authHeaders();
+  if (accessKey) headers['x-admin-key'] = accessKey;
+
+  const { data, error } = await supabase.functions.invoke('admin-db', {
+    headers,
+    body: { table, action: 'fetch' },
+  });
+  if (error) await handleFunctionError(error);
   return data;
 }
 
-export async function updateTableRow(table: string, id: string, updates: Record<string, unknown>) {
-  const { data, error } = await (supabase as any).from(table).update(updates).eq('id', id).select().single();
-  if (error) throw error;
+export async function updateTableRow(table: string, id: string, updates: Record<string, unknown>, accessKey?: string) {
+  const headers = authHeaders();
+  if (accessKey) headers['x-admin-key'] = accessKey;
+
+  const { data, error } = await supabase.functions.invoke('admin-db', {
+    headers,
+    body: { table, action: 'update', id, updates },
+  });
+  if (error) await handleFunctionError(error);
   return data;
 }
 
-export async function updateGlobalSetting(key: string, value: number) {
-  const { data, error } = await (supabase as any).from('global_game_settings').update({ value }).eq('key', key).select().single();
-  if (error) throw error;
+export async function updateGlobalSetting(key: string, value: number, accessKey?: string) {
+  const headers = authHeaders();
+  if (accessKey) headers['x-admin-key'] = accessKey;
+
+  const { data, error } = await supabase.functions.invoke('admin-db', {
+    headers,
+    body: { table: 'global_game_settings', action: 'update', id: key, updates: { value } },
+  });
+  if (error) await handleFunctionError(error);
   return data;
 }

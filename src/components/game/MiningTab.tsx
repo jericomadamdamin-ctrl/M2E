@@ -114,142 +114,156 @@ export const MiningTab = ({
         </div>
       )}
 
-      {userMachines.length === 0 ? (
-        <div className="flex flex-col items-center justify-center h-full py-16 px-4">
-          <div className="text-6xl mb-4 animate-float">⛏️</div>
-          <h3 className="font-pixel text-primary text-sm mb-2 text-glow">No Machines</h3>
-          <p className="text-muted-foreground text-center text-sm">
-            Visit the Shop to buy your first mining machine!
-          </p>
-        </div>
-      ) : (
-        machineStats.map(({ machine, speed, burn, capacity }) => {
-          const fuelPercent = capacity > 0 ? Math.min(100, (machine.fuelOil / capacity) * 100) : 0;
-          const canFuel = machine.fuelOil < capacity && oilBalance > 0;
+      {/* Render Machines */}
+      {machineStats.map(({ machine, speed, burn, capacity }) => {
+        const fuelPercent = capacity > 0 ? Math.min(100, (machine.fuelOil / capacity) * 100) : 0;
+        const canFuel = machine.fuelOil < capacity && oilBalance > 0;
 
-          return (
-            <div
-              key={machine.id}
-              className={`card-game rounded-xl p-4 ${machine.isActive ? 'glow-green' : ''}`}
-            >
-              <div className="flex gap-4">
-                {/* Machine Icon & Status */}
-                <div className="flex flex-col items-center">
-                  <div className={`relative w-12 h-12 flex items-center justify-center ${machine.isActive ? 'animate-mining' : ''}`}>
-                    <img src={getMachineIcon(machine.type, config)} alt={machine.type} className="w-full h-full object-contain" />
+        return (
+          <div
+            key={machine.id}
+            className={`card-game rounded-xl p-4 ${machine.isActive ? 'glow-green' : ''}`}
+          >
+            <div className="flex gap-4">
+              {/* Machine Icon & Status */}
+              <div className="flex flex-col items-center">
+                <div className={`relative w-12 h-12 flex items-center justify-center ${machine.isActive ? 'animate-mining' : ''}`}>
+                  <img src={getMachineIcon(machine.type, config)} alt={machine.type} className="w-full h-full object-contain" />
+                </div>
+                <div className={`mt-2 px-2 py-0.5 rounded text-xs font-bold ${machine.isActive
+                  ? 'bg-primary/20 text-primary'
+                  : 'bg-muted text-muted-foreground'
+                  }`}>
+                  {machine.isActive ? 'MINING' : 'IDLE'}
+                </div>
+              </div>
+
+              {/* Machine Info */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="font-bold text-sm truncate">{config.machines[machine.type]?.name || DEFAULT_MACHINE_NAMES[machine.type] || machine.type}</h3>
+                  <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded font-bold">
+                    Lv.{machine.level}/{config.machines[machine.type].max_level}
+                  </span>
+                </div>
+
+                {/* Fuel Progress */}
+                <div className="mb-3">
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="text-muted-foreground flex items-center gap-1">
+                      <Droplet className="w-3 h-3" /> Fuel
+                    </span>
+                    <span className="text-muted-foreground">
+                      {machine.fuelOil.toFixed(1)} / {capacity.toFixed(1)} OIL
+                    </span>
                   </div>
-                  <div className={`mt-2 px-2 py-0.5 rounded text-xs font-bold ${machine.isActive
-                    ? 'bg-primary/20 text-primary'
-                    : 'bg-muted text-muted-foreground'
-                    }`}>
-                    {machine.isActive ? 'MINING' : 'IDLE'}
+                  <Progress value={fuelPercent} className="h-2" />
+                </div>
+
+                {/* Stats */}
+                <div className="grid grid-cols-2 gap-2 text-xs mb-3">
+                  <div className="bg-secondary/30 rounded px-2 py-1">
+                    <span className="text-muted-foreground">Speed:</span>
+                    <span className="ml-1 text-primary font-bold">{speed.toFixed(1)}/hr</span>
+                  </div>
+                  <div className="bg-secondary/30 rounded px-2 py-1">
+                    <span className="text-muted-foreground">Burn:</span>
+                    <span className="ml-1 text-accent font-bold">{burn.toFixed(1)}/hr</span>
                   </div>
                 </div>
 
-                {/* Machine Info */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="font-bold text-sm truncate">{config.machines[machine.type]?.name || DEFAULT_MACHINE_NAMES[machine.type] || machine.type}</h3>
-                    <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded font-bold">
-                      Lv.{machine.level}/{config.machines[machine.type].max_level}
-                    </span>
-                  </div>
-
-                  {/* Fuel Progress */}
-                  <div className="mb-3">
-                    <div className="flex justify-between text-xs mb-1">
-                      <span className="text-muted-foreground flex items-center gap-1">
-                        <Droplet className="w-3 h-3" /> Fuel
-                      </span>
-                      <span className="text-muted-foreground">
-                        {machine.fuelOil.toFixed(1)} / {capacity.toFixed(1)} OIL
-                      </span>
-                    </div>
-                    <Progress value={fuelPercent} className="h-2" />
-                  </div>
-
-                  {/* Stats */}
-                  <div className="grid grid-cols-2 gap-2 text-xs mb-3">
-                    <div className="bg-secondary/30 rounded px-2 py-1">
-                      <span className="text-muted-foreground">Speed:</span>
-                      <span className="ml-1 text-primary font-bold">{speed.toFixed(1)}/hr</span>
-                    </div>
-                    <div className="bg-secondary/30 rounded px-2 py-1">
-                      <span className="text-muted-foreground">Burn:</span>
-                      <span className="ml-1 text-accent font-bold">{burn.toFixed(1)}/hr</span>
-                    </div>
-                  </div>
-
-                  {/* Action Buttons */}
-                  <div className="flex gap-2 flex-wrap">
-                    {machine.isActive ? (
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        className="flex-1 h-8 text-xs transition-transform active:scale-95"
-                        onClick={() => onStop?.(machine.id)}
-                      >
-                        <Square className="w-3 h-3 mr-1" />
-                        Stop
-                      </Button>
-                    ) : (
-                      <Button
-                        size="sm"
-                        variant="default"
-                        className="flex-1 h-8 text-xs glow-green transition-transform active:scale-95"
-                        onClick={() => onStart(machine.id)}
-                        disabled={machine.fuelOil <= 0}
-                      >
-                        <Play className="w-3 h-3 mr-1" />
-                        Start
-                      </Button>
-                    )}
-
+                {/* Action Buttons */}
+                <div className="flex gap-2 flex-wrap">
+                  {machine.isActive ? (
                     <Button
                       size="sm"
-                      variant="secondary"
-                      className="h-8 text-xs transition-transform active:scale-95"
-                      onClick={() => onFuel(machine.id)}
-                      disabled={!canFuel}
+                      variant="destructive"
+                      className="flex-1 h-8 text-xs transition-transform active:scale-95"
+                      onClick={() => onStop?.(machine.id)}
                     >
-                      <Droplet className="w-3 h-3 mr-1" />
-                      Fuel
+                      <Square className="w-3 h-3 mr-1" />
+                      Stop
                     </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="default"
+                      className="flex-1 h-8 text-xs glow-green transition-transform active:scale-95"
+                      onClick={() => onStart(machine.id)}
+                      disabled={machine.fuelOil <= 0}
+                    >
+                      <Play className="w-3 h-3 mr-1" />
+                      Start
+                    </Button>
+                  )}
 
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="h-8 text-xs transition-transform active:scale-95"
+                    onClick={() => onFuel(machine.id)}
+                    disabled={!canFuel}
+                  >
+                    <Droplet className="w-3 h-3 mr-1" />
+                    Fuel
+                  </Button>
+
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 w-8 text-xs border-accent text-accent hover:bg-accent/20 font-bold"
+                    onClick={() => onUpgrade?.(machine.id)}
+                    disabled={machine.level >= config.machines[machine.type].max_level}
+                    title="Upgrade"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </Button>
+
+                  {/* Discard Button */}
+                  {onDiscard && (
                     <Button
                       size="sm"
                       variant="outline"
-                      className="h-8 w-8 text-xs border-accent text-accent hover:bg-accent/20 font-bold text-lg"
-                      onClick={() => onUpgrade?.(machine.id)}
-                      disabled={machine.level >= config.machines[machine.type].max_level}
-                      title="Upgrade"
+                      className="h-8 w-8 text-xs border-destructive text-destructive hover:bg-destructive/20"
+                      onClick={() => {
+                        if (window.confirm('Are you sure you want to DISCARD this machine? You will NOT get any refund. This action cannot be undone.')) {
+                          onDiscard(machine.id);
+                        }
+                      }}
+                      title="Discard Machine (No Refund)"
                     >
-                      <Plus className="w-4 h-4" />
+                      <Trash2 className="w-4 h-4" />
                     </Button>
-
-                    {/* Discard Button - Allow for ALL machines */}
-                    {onDiscard && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-8 w-8 text-xs border-destructive text-destructive hover:bg-destructive/20"
-                        onClick={() => {
-                          if (window.confirm('Are you sure you want to DISCARD this machine? You will NOT get any refund. This action cannot be undone.')) {
-                            onDiscard(machine.id);
-                          }
-                        }}
-                        title="Discard Machine (No Refund)"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    )}
-                  </div>
+                  )}
                 </div>
               </div>
             </div>
-          );
-        })
-      )}
+          </div>
+        );
+      })}
+
+      {/* Render Empty Slot Skeletons */}
+      {Array.from({ length: Math.max(0, maxSlots - userMachines.length) }).map((_, i) => (
+        <div
+          // biome-ignore lint/suspicious/noArrayIndexKey: Static skeletons based on length
+          key={`empty-slot-${i}`}
+          className="card-game rounded-xl p-4 border-dashed border-2 border-white/5 bg-white/5 hover:bg-white/10 transition-colors cursor-pointer group"
+          onClick={onBuySlots}
+        >
+          <div className="flex items-center gap-4 opacity-40 group-hover:opacity-100 transition-opacity">
+            <div className="w-12 h-12 rounded bg-white/5 flex items-center justify-center">
+              <Plus className="w-6 h-6 text-white/20" />
+            </div>
+            <div className="flex-1">
+              <div className="h-4 w-24 bg-white/10 rounded mb-2" />
+              <div className="h-3 w-32 bg-white/5 rounded" />
+            </div>
+            <div className="text-[10px] font-pixel text-primary/50 group-hover:text-primary transition-colors">
+              +{slotConfig.slot_pack_size} SLOTS
+            </div>
+          </div>
+        </div>
+      ))}
     </div>
   );
 };

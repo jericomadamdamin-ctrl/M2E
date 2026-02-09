@@ -80,14 +80,26 @@ export async function requireAdmin(userId: string) {
 }
 
 export async function requireAdminOrKey(req: Request, userId: string) {
-  // If key is valid, we allow it
   const providedKey = req.headers.get('x-admin-key');
   const requiredKey = Deno.env.get('ADMIN_ACCESS_KEY');
+  const allowedWallet = Deno.env.get('ADMIN_WALLET_ADDRESS');
 
   if (requiredKey && providedKey === requiredKey) {
-    // Optional: Auto-elevate
     const admin = getAdminClient();
-    await admin.from('profiles').update({ is_admin: true }).eq('id', userId);
+    const { data: profile } = await admin
+      .from('profiles')
+      .select('wallet_address, is_admin')
+      .eq('id', userId)
+      .single();
+
+    // If a master wallet is configured, even the key holder MUST be on that wallet
+    if (allowedWallet && profile?.wallet_address?.toLowerCase() !== allowedWallet.toLowerCase()) {
+      throw new Error('This admin key can only be used by the authorized master wallet.');
+    }
+
+    if (profile && !profile.is_admin) {
+      await admin.from('profiles').update({ is_admin: true }).eq('id', userId);
+    }
     return;
   }
 

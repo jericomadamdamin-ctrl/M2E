@@ -23,6 +23,10 @@ interface AdminStats {
     execution_rounds: Round[];
 }
 
+const isMiniKitEnviroment = () => {
+    return typeof window !== 'undefined' && (window as any).MiniKit?.isInstalled();
+};
+
 export const AdminTab = () => {
     const [stats, setStats] = useState<AdminStats | null>(null);
     const [loading, setLoading] = useState(false);
@@ -120,6 +124,21 @@ export const AdminTab = () => {
             setProcessingId(null);
         }
     };
+
+    if (!isMiniKitEnviroment() && process.env.NODE_ENV === 'production') {
+        return (
+            <div className="flex flex-col items-center justify-center p-8 space-y-4 animate-fade-in min-h-[50vh] text-center">
+                <AlertTriangle className="w-12 h-12 text-yellow-500 mb-4" />
+                <h2 className="font-pixel text-xl text-primary text-glow">Security Restriction</h2>
+                <p className="text-muted-foreground max-w-xs">
+                    The Game Master dashboard can only be accessed from within the World App (MiniKit).
+                </p>
+                <div className="text-[10px] opacity-30 mt-8 font-mono">
+                    ENV_RESTRICTION: MINIKIT_ONLY
+                </div>
+            </div>
+        );
+    }
 
     if (!isAuthenticated) {
         return (
@@ -281,25 +300,25 @@ export const AdminTab = () => {
                 )}
             </div>
             {/* Section 3: Machine Tiers Editor */}
-            <MachineTiersEditor />
+            <MachineTiersEditor accessKey={accessKey} />
 
             {/* Section 4: Mineral Configs Editor */}
-            <MineralConfigsEditor />
+            <MineralConfigsEditor accessKey={accessKey} />
 
             {/* Section 5: Global Game Settings */}
-            <GlobalSettings />
+            <GlobalSettings accessKey={accessKey} />
         </div>
     );
 };
 
-const MachineTiersEditor = () => {
+const MachineTiersEditor = ({ accessKey }: { accessKey: string }) => {
     const { toast } = useToast();
     const [loading, setLoading] = useState(false);
     const [tiers, setTiers] = useState<any[]>([]);
 
     const loadTiers = async () => {
         try {
-            const data = await fetchTable('machine_tiers');
+            const data = await fetchTable('machine_tiers', accessKey);
             setTiers(data.sort((a: any, b: any) => a.cost_wld - b.cost_wld));
         } catch (err) {
             console.error(err);
@@ -311,8 +330,8 @@ const MachineTiersEditor = () => {
     const handleUpdate = async (id: string, updates: any) => {
         setLoading(true);
         try {
-            await updateTableRow('machine_tiers', id, updates);
-            toast({ title: 'Tier Updated', description: `Saved changes for ${id}` });
+            await updateTableRow('machine_tiers', id, updates, accessKey);
+            toast({ title: 'Tier Updated', description: `Saved changes for ${id}`, className: 'glow-green' });
             await loadTiers();
         } catch (err: any) {
             toast({ title: 'Update Failed', description: err.message, variant: 'destructive' });
@@ -380,14 +399,14 @@ const MachineTiersEditor = () => {
     );
 };
 
-const MineralConfigsEditor = () => {
+const MineralConfigsEditor = ({ accessKey }: { accessKey: string }) => {
     const { toast } = useToast();
     const [loading, setLoading] = useState(false);
     const [minerals, setMinerals] = useState<any[]>([]);
 
     const loadMinerals = async () => {
         try {
-            const data = await fetchTable('mineral_configs');
+            const data = await fetchTable('mineral_configs', accessKey);
             setMinerals(data.sort((a: any, b: any) => a.oil_value - b.oil_value));
         } catch (err) {
             console.error(err);
@@ -399,8 +418,8 @@ const MineralConfigsEditor = () => {
     const handleUpdate = async (id: string, updates: any) => {
         setLoading(true);
         try {
-            await updateTableRow('mineral_configs', id, updates);
-            toast({ title: 'Mineral Updated', description: `Saved changes for ${id}` });
+            await updateTableRow('mineral_configs', id, updates, accessKey);
+            toast({ title: 'Mineral Updated', description: `Saved changes for ${id}`, className: 'glow-green' });
             await loadMinerals();
         } catch (err: any) {
             toast({ title: 'Update Failed', description: err.message, variant: 'destructive' });
@@ -449,14 +468,14 @@ const MineralConfigsEditor = () => {
     );
 };
 
-const GlobalSettings = () => {
+const GlobalSettings = ({ accessKey }: { accessKey: string }) => {
     const { toast } = useToast();
     const [loading, setLoading] = useState(false);
     const [settings, setSettings] = useState<any[]>([]);
 
     const loadSettings = async () => {
         try {
-            const data = await fetchTable('global_game_settings');
+            const data = await fetchTable('global_game_settings', accessKey);
             setSettings(data);
         } catch (err) {
             console.error(err);
@@ -468,8 +487,8 @@ const GlobalSettings = () => {
     const handleUpdate = async (key: string, value: number) => {
         setLoading(true);
         try {
-            await updateGlobalSetting(key, value);
-            toast({ title: 'Setting Updated', description: `${key} saved.` });
+            await updateGlobalSetting(key, value, accessKey);
+            toast({ title: 'Setting Updated', description: `${key} saved.`, className: 'glow-green' });
             await loadSettings();
         } catch (err: any) {
             toast({ title: 'Update Failed', description: err.message, variant: 'destructive' });

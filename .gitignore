@@ -26,3 +26,4 @@ dist-ssr
 .env.example
 dummy_write.md
 roi_analysis_proposed.md
+GAME_ECONOMY_CONFIG.md

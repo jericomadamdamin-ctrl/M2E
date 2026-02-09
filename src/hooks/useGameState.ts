@@ -217,6 +217,10 @@ export const useGameState = () => {
         setMachines((prev) => prev.map((m) => (m.id === machineId ? { ...m, isActive: false, lastProcessedAt: nowIso } : m)));
       }
 
+      if (machineId && action === 'discard_machine') {
+        setMachines((prev) => prev.filter((m) => m.id !== machineId));
+      }
+
       let didOptimisticallyChangePlayer = false;
 
       if (machineId && action === 'fuel_machine') {
