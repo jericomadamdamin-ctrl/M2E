@@ -24,8 +24,11 @@ Deno.serve(async (req) => {
     if (!tokenSymbol || !['WLD', 'USDC'].includes(tokenSymbol)) {
       throw new Error('Invalid token');
     }
-    if (oilAmount <= 0) {
+    if (isNaN(oilAmount) || !Number.isFinite(oilAmount) || oilAmount <= 0) {
       throw new Error('Invalid OIL amount');
+    }
+    if (oilAmount > 1000000) {
+      throw new Error('Maximum OIL purchase is 1,000,000');
     }
 
     const config = await getGameConfig();

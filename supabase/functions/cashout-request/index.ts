@@ -20,10 +20,14 @@ Deno.serve(async (req) => {
     const userId = await requireUserId(req);
     await requireHuman(userId);
     const { diamonds } = await req.json();
-    const requestedDiamonds = Number(diamonds || 0);
+    const requestedDiamonds = Math.floor(Number(diamonds || 0));
 
-    if (requestedDiamonds <= 0) {
+    if (requestedDiamonds <= 0 || isNaN(requestedDiamonds) || !Number.isFinite(requestedDiamonds)) {
       throw new Error('Invalid diamond amount');
+    }
+
+    if (requestedDiamonds > 1000000) {
+      throw new Error('Maximum payout request is 1,000,000 diamonds');
     }
 
     // Phase 0: Feature flag check

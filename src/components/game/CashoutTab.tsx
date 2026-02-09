@@ -63,8 +63,12 @@ export const CashoutTab = ({ diamonds, minRequired, cooldownDays }: CashoutTabPr
           type="number"
           value={amount}
           min={minRequired}
-          max={diamonds}
-          onChange={(e) => setAmount(Number(e.target.value))}
+          max={Math.min(diamonds, 1000000)}
+          onChange={(e) => {
+            const val = Math.floor(Number(e.target.value));
+            if (val > 1000000) return;
+            setAmount(val);
+          }}
           className="bg-secondary/50"
         />
         <Button

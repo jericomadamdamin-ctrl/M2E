@@ -112,7 +112,9 @@ Deno.serve(async (req) => {
 
       const capacity = getTankCapacity(config, machine.type, machine.level);
       const needed = Math.max(0, capacity - Number(machine.fuel_oil));
-      const requested = typeof payload?.amount === 'number' ? payload.amount : needed;
+      const requested = typeof payload?.amount === 'number' ? Math.floor(payload.amount) : needed;
+
+      if (requested < 0) throw new Error('Invalid fuel amount');
       const fillAmount = Math.min(needed, requested, Number(updatedState.oil_balance));
 
       if (fillAmount <= 0) throw new Error('No OIL available to fuel');
@@ -180,14 +182,17 @@ Deno.serve(async (req) => {
 
     if (action === 'exchange_minerals') {
       const mineral = payload?.mineral as string;
-      const amount = Number(payload?.amount || 0);
+      const amount = Math.floor(Number(payload?.amount || 0));
       const mineralDef = config.mining.action_rewards.minerals[mineral];
       if (!mineralDef) throw new Error('Invalid mineral');
-      if (amount <= 0) throw new Error('Invalid amount');
+      if (amount <= 0 || isNaN(amount) || !Number.isFinite(amount)) throw new Error('Invalid amount');
+      if (amount > 1000000) throw new Error('Maximum exchange amount is 1,000,000');
 
       const current = Number(updatedState.minerals?.[mineral] || 0);
       if (current < amount) throw new Error('Insufficient minerals');
 
+      const oilGain = amount * mineralDef.oil_value;
+      updatedState.minerals[mineral] = current - amount;
       updatedState.oil_balance = Number(updatedState.oil_balance) + oilGain;
     }
 

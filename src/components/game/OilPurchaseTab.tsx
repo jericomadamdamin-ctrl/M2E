@@ -119,12 +119,17 @@ export const OilPurchaseTab = ({ defaultOil = 1000, onComplete }: OilPurchaseTab
         </div>
 
         <div>
-          <label className="text-xs text-muted-foreground">OIL Amount</label>
+          <label className="text-xs text-muted-foreground">OIL Amount (Max 1,000,000)</label>
           <Input
             type="number"
             min={1}
+            max={1000000}
             value={oilAmount}
-            onChange={(e) => setOilAmount(Number(e.target.value))}
+            onChange={(e) => {
+              const val = Number(e.target.value);
+              if (val > 1000000) return; // Prevent excessive input
+              setOilAmount(val);
+            }}
             className="bg-secondary/50"
           />
         </div>

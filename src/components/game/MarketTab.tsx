@@ -28,8 +28,10 @@ export const MarketTab = ({ config, minerals, oilBalance, onExchange }: MarketTa
   };
 
   const handleExchange = (type: MineralType) => {
-    if (selectedAmounts[type] > 0) {
-      onExchange(type, selectedAmounts[type]);
+    const amount = Math.floor(selectedAmounts[type]);
+    if (amount > 0) {
+      const finalAmount = Math.min(amount, 1000000);
+      onExchange(type, finalAmount);
       setSelectedAmounts(prev => ({ ...prev, [type]: 0 }));
     }
   };
