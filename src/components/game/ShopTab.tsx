@@ -135,16 +135,21 @@ export const ShopTab = ({ config, oilBalance, machines, maxSlots, onBuy, onBuySl
 
                     {/* Price & Buy Button */}
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1">
-                        <span className="text-game-oil text-lg">🛢️</span>
-                        <span className={`font-bold text-lg ${canAfford ? 'text-primary' : 'text-destructive'}`}>
-                          {template.cost_oil.toLocaleString()}
-                        </span>
+                      <div className="flex flex-col">
+                        <div className="flex items-center gap-1">
+                          <span className="text-muted-foreground text-[10px] uppercase font-bold tracking-wider">Price</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className="text-primary text-lg font-pixel-small">W</span>
+                          <span className={`font-bold text-lg ${canAfford ? 'text-primary' : 'text-white/40'}`}>
+                            {(template.cost_wld || 0).toLocaleString()} <span className="text-xs">WLD</span>
+                          </span>
+                        </div>
                       </div>
                       <Button
                         onClick={() => onBuy(type)}
-                        disabled={!canAfford}
-                        className={`${canAfford ? 'glow-green' : ''}`}
+                        disabled={atSlotLimit}
+                        className={`${!atSlotLimit ? 'glow-green' : ''}`}
                       >
                         <ShoppingCart className="w-4 h-4 mr-2" />
                         {atSlotLimit ? 'No Slots' : 'Buy Now'}

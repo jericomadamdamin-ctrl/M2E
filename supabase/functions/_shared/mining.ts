@@ -2,7 +2,7 @@ import { getAdminClient } from './supabase.ts';
 
 type GameConfig = {
   pricing: { oil_per_wld: number; oil_per_usdc: number; usdc_to_wld_rate?: number };
-  machines: Record<string, { cost_oil: number; speed_actions_per_hour: number; oil_burn_per_hour: number; tank_capacity: number; max_level: number; name?: string; image_url?: string }>;
+  machines: Record<string, { cost_oil: number; cost_wld?: number; speed_actions_per_hour: number; oil_burn_per_hour: number; tank_capacity: number; max_level: number; name?: string; image_url?: string }>;
   mining: { action_rewards: { minerals: Record<string, { drop_rate: number; oil_value: number }>; diamond: { drop_rate_per_action: number } } };
   diamond_controls: { daily_cap_per_user: number; excess_diamond_oil_value: number };
   progression: { level_speed_multiplier: number; level_oil_burn_multiplier: number; level_capacity_multiplier: number; upgrade_cost_multiplier: number };
@@ -52,17 +52,17 @@ export async function getGameConfig(): Promise<GameConfig> {
 
   const config = configData.value as GameConfig;
 
-  // Verify machine_tiers from DB to ensure extensibility and override JSON
-  const { data: machinesData, error: machinesError } = await admin
+  // 1. Fetch Machine Tiers
+  const { data: machinesData } = await admin
     .from('machine_tiers')
     .select('*')
     .eq('is_enabled', true);
 
-  if (!machinesError && machinesData && machinesData.length > 0) {
-    const dbMachines: Record<string, any> = {};
-    machinesData.forEach((m) => {
-      dbMachines[m.id] = {
+  if (machinesData && (machinesData as any[]).length > 0) {
+    (machinesData as any[]).forEach((m) => {
+      config.machines[m.id] = {
         cost_oil: Number(m.cost_oil),
+        cost_wld: Number(m.cost_wld || 0),
         speed_actions_per_hour: Number(m.speed_actions_per_hour),
         oil_burn_per_hour: Number(m.oil_burn_per_hour),
         tank_capacity: Number(m.tank_capacity),
@@ -71,8 +71,47 @@ export async function getGameConfig(): Promise<GameConfig> {
         image_url: m.image_url,
       };
     });
-    // Merge DB machines into config, overriding JSON defaults
-    config.machines = { ...config.machines, ...dbMachines };
+  }
+
+  // 2. Fetch Mineral Configs
+  const { data: mineralData } = await admin
+    .from('mineral_configs')
+    .select('*');
+
+  if (mineralData && (mineralData as any[]).length > 0) {
+    (mineralData as any[]).forEach((m) => {
+      config.mining.action_rewards.minerals[m.id] = {
+        drop_rate: Number(m.drop_rate),
+        oil_value: Number(m.oil_value),
+      };
+    });
+  }
+
+  // 3. Fetch Global Settings
+  const { data: settingsData } = await admin
+    .from('global_game_settings')
+    .select('*');
+
+  if (settingsData && (settingsData as any[]).length > 0) {
+    (settingsData as any[]).forEach((s) => {
+      switch (s.key) {
+        case 'diamond_drop_rate':
+          config.mining.action_rewards.diamond.drop_rate_per_action = Number(s.value);
+          break;
+        case 'upgrade_cost_multiplier':
+          config.progression.upgrade_cost_multiplier = Number(s.value);
+          break;
+        case 'daily_diamond_cap':
+          config.diamond_controls.daily_cap_per_user = Number(s.value);
+          break;
+        case 'oil_per_wld':
+          config.pricing.oil_per_wld = Number(s.value);
+          break;
+        case 'payout_percentage':
+          if (config.treasury) config.treasury.payout_percentage = Number(s.value);
+          break;
+      }
+    });
   }
 
   return config;

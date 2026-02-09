@@ -8,8 +8,10 @@ import {
   authHeaders,
   initiateSlotPurchase,
   confirmSlotPurchase,
+  initiateMachinePurchase,
+  confirmMachinePurchase,
 } from '@/lib/backend';
-import { MiniKit, Tokens, tokenToDecimals, type PayCommandInput, type PayCommandResult } from '@worldcoin/minikit-js';
+import { MiniKit, Tokens, tokenToDecimals, type PayCommandInput } from '@worldcoin/minikit-js';
 import { ensureMiniKit, getMiniKitErrorMessage } from '@/lib/minikit';
 import { clearSession, getSession } from '@/lib/session';
 import { GameConfig, Machine, PlayerState, GameStateResponse, MachineType, MineralType } from '@/types/game';
@@ -349,7 +351,66 @@ export const useGameState = () => {
     return queued;
   }, [toast, handleAuthFailure]);
 
-  const buyMachine = useCallback((type: MachineType) => executeAction('buy_machine', { machineType: type }), [executeAction]);
+  const buyMachine = async (type: MachineType) => {
+    const miniKit = ensureMiniKit();
+    if (!miniKit.ok) {
+      toast({
+        title: 'World App required',
+        description: getMiniKitErrorMessage(miniKit.reason),
+        variant: 'destructive',
+      });
+      return false;
+    }
+
+    setLoading(true);
+    try {
+      const init = await initiateMachinePurchase(type);
+
+      const payPayload: PayCommandInput = {
+        reference: init.reference,
+        to: init.to_address,
+        tokens: [
+          {
+            symbol: Tokens.WLD,
+            token_amount: tokenToDecimals(init.amount_wld, Tokens.WLD).toString(),
+          },
+        ],
+        description: init.description,
+      };
+
+      const { finalPayload } = (await MiniKit.commandsAsync.pay(payPayload)) as any;
+
+      if (finalPayload.status !== 'success') {
+        throw new Error('Payment cancelled');
+      }
+
+      const result = await confirmMachinePurchase(init.reference);
+
+      if (result.ok) {
+        toast({
+          title: 'Machine Purchased!',
+          description: result.message,
+          className: 'glow-green',
+        });
+
+        // Refresh to get the new machine
+        await refresh(true);
+        return true;
+      } else {
+        throw new Error('Purchase confirmation failed');
+      }
+    } catch (err: any) {
+      toast({
+        title: 'Purchase Failed',
+        description: err?.message || 'Unable to buy machine',
+        variant: 'destructive',
+      });
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const fuelMachine = useCallback((machineId: string, amount?: number) => executeAction('fuel_machine', { machineId, amount }), [executeAction]);
   const startMachine = useCallback((machineId: string) => executeAction('start_machine', { machineId }), [executeAction]);
   const stopMachine = useCallback((machineId: string) => executeAction('stop_machine', { machineId }), [executeAction]);
@@ -362,7 +423,7 @@ export const useGameState = () => {
   }, []);
 
   const buySlots = async () => {
-    const miniKit = ensureMiniKit();
+    const miniKit = ensureMiniKit() as any;
     if (!miniKit.ok) {
       toast({
         title: 'World App required',
@@ -388,7 +449,7 @@ export const useGameState = () => {
         description: init.description,
       };
 
-      const { finalPayload } = await MiniKit.commandsAsync.pay(payPayload) as PayCommandResult;
+      const { finalPayload } = (await MiniKit.commandsAsync.pay(payPayload)) as any;
 
       if (finalPayload.status !== 'success') {
         throw new Error('Payment cancelled');

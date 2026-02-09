@@ -79,14 +79,20 @@ export async function requireAdmin(userId: string) {
   }
 }
 
-export function requireAdminKey(req: Request) {
+export async function requireAdminOrKey(req: Request, userId: string) {
+  // If key is valid, we allow it
+  const providedKey = req.headers.get('x-admin-key');
   const requiredKey = Deno.env.get('ADMIN_ACCESS_KEY');
-  if (requiredKey) {
-    const providedKey = req.headers.get('x-admin-key');
-    if (providedKey !== requiredKey) {
-      throw new Error('Invalid admin access key');
-    }
+
+  if (requiredKey && providedKey === requiredKey) {
+    // Optional: Auto-elevate
+    const admin = getAdminClient();
+    await admin.from('profiles').update({ is_admin: true }).eq('id', userId);
+    return;
   }
+
+  // Fallback to strict DB check
+  await requireAdmin(userId);
 }
 
 export async function createSession(userId: string, ttlHours = 24 * 30) {

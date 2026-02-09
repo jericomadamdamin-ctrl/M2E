@@ -1,5 +1,5 @@
 import { corsHeaders, handleOptions } from '../_shared/cors.ts';
-import { getAdminClient, requireUserId, requireAdmin } from '../_shared/supabase.ts';
+import { getAdminClient, requireUserId, requireAdmin, requireAdminOrKey } from '../_shared/supabase.ts';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const setByPath = (obj: any, path: string, value: any) => {
@@ -28,7 +28,7 @@ Deno.serve(async (req) => {
     }
 
     const userId = await requireUserId(req);
-    await requireAdmin(userId);
+    await requireAdminOrKey(req, userId);
 
     const body = await req.json();
     const updates = body?.updates as Record<string, unknown> | undefined;

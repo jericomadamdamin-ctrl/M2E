@@ -67,42 +67,7 @@ Deno.serve(async (req) => {
       machines = machines.map((m) => (m.id === machineId ? { ...m, ...patch } : m));
     };
 
-    if (action === 'buy_machine') {
-      const machineType = payload?.machineType as string;
-      const machineConfig = config.machines[machineType];
-      if (!machineConfig) throw new Error('Invalid machine type');
-
-      // Check slot limit
-      const slotConfig = (config as any).slots ?? { base_slots: 10, max_total_slots: 30 };
-      const purchasedSlots = Number((stateRow as any).purchased_slots ?? 0);
-      const maxSlots = Math.min(slotConfig.base_slots + purchasedSlots, slotConfig.max_total_slots);
-      if (machines.length >= maxSlots) {
-        throw new Error(`Machine slot limit reached (${machines.length}/${maxSlots}). Purchase more slots to continue.`);
-      }
-
-      const cost = machineConfig.cost_oil;
-      if (updatedState.oil_balance < cost) throw new Error('Insufficient OIL');
-
-      const { data: insertedMachine, error: insertError } = await admin
-        .from('player_machines')
-        .insert({
-          user_id: userId,
-          type: machineType,
-          level: 1,
-          fuel_oil: 0,
-          is_active: false,
-          last_processed_at: null,
-        })
-        .select('*')
-        .single();
-
-      if (insertError) throw insertError;
-      if (insertedMachine) {
-        machines = [...machines, insertedMachine as MachineRow];
-      }
-
-      updatedState.oil_balance = Number(updatedState.oil_balance) - cost;
-    }
+    // buy_machine has been moved to machine-purchase-initiate/confirm (WLD only)
 
     if (action === 'fuel_machine') {
       const machineId = payload?.machineId as string;

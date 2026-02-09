@@ -190,6 +190,31 @@ export async function confirmSlotPurchase(payload: unknown) {
   return data as { ok: boolean; slots_added: number };
 }
 
+export async function initiateMachinePurchase(machineType: string) {
+  const { data, error } = await supabase.functions.invoke('machine-purchase-initiate', {
+    headers: authHeaders(),
+    body: { machineType },
+  });
+  if (error) await handleFunctionError(error);
+  return data as {
+    reference: string;
+    machine_type: string;
+    amount_wld: number;
+    to_address: string;
+    description: string;
+  };
+}
+
+export async function confirmMachinePurchase(reference: string) {
+  const { data, error } = await supabase.functions.invoke('machine-purchase-confirm', {
+    headers: authHeaders(),
+    body: { reference },
+  });
+  if (error) await handleFunctionError(error);
+  // biome-ignore lint/suspicious/noExplicitAny: Machine type
+  return data as { ok: boolean; machine: any; message: string };
+}
+
 export async function fetchAdminStats(accessKey?: string) {
   const headers = authHeaders();
   if (accessKey) headers['x-admin-key'] = accessKey;
@@ -218,7 +243,7 @@ export async function processCashoutRound(roundId: string, accessKey?: string) {
 }
 
 export async function executeCashoutPayouts(roundId: string, accessKey?: string) {
-  const headers = authHeaders();
+  const headers = authHeaders() as Record<string, string>;
   if (accessKey) headers['x-admin-key'] = accessKey;
 
   const { data, error } = await supabase.functions.invoke('cashout-execute', {
@@ -228,4 +253,22 @@ export async function executeCashoutPayouts(roundId: string, accessKey?: string)
   if (error) await handleFunctionError(error);
   // biome-ignore lint/suspicious/noExplicitAny: Payout results
   return data as { ok: boolean; results: any[] };
+}
+
+export async function fetchTable(table: string) {
+  const { data, error } = await (supabase as any).from(table).select('*');
+  if (error) throw error;
+  return data;
+}
+
+export async function updateTableRow(table: string, id: string, updates: Record<string, unknown>) {
+  const { data, error } = await (supabase as any).from(table).update(updates).eq('id', id).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateGlobalSetting(key: string, value: number) {
+  const { data, error } = await (supabase as any).from('global_game_settings').update({ value }).eq('key', key).select().single();
+  if (error) throw error;
+  return data;
 }

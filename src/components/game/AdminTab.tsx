@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { fetchAdminStats, processCashoutRound, executeCashoutPayouts, fetchConfig, updateConfig } from '@/lib/backend';
+import { fetchAdminStats, processCashoutRound, executeCashoutPayouts, fetchConfig, updateConfig, fetchTable, updateTableRow, updateGlobalSetting } from '@/lib/backend';
 import { Loader2, AlertTriangle, CheckCircle, Play, DollarSign, Lock, Settings, Save } from 'lucide-react';
 import { formatCompactNumber } from '@/lib/format';
 
@@ -280,59 +280,40 @@ export const AdminTab = () => {
                     ))
                 )}
             </div>
-            {/* Section 3: Global Game Settings */}
+            {/* Section 3: Machine Tiers Editor */}
+            <MachineTiersEditor />
+
+            {/* Section 4: Mineral Configs Editor */}
+            <MineralConfigsEditor />
+
+            {/* Section 5: Global Game Settings */}
             <GlobalSettings />
         </div>
     );
 };
 
-// Sub-component for Global Settings
-const GlobalSettings = () => {
+const MachineTiersEditor = () => {
     const { toast } = useToast();
     const [loading, setLoading] = useState(false);
-    const [config, setConfig] = useState<any>(null);
+    const [tiers, setTiers] = useState<any[]>([]);
 
-    // Form state
-    const [referralBonus, setReferralBonus] = useState('0.5');
-    const [oilPerWld, setOilPerWld] = useState('1000');
-    const [oilPerUsdc, setOilPerUsdc] = useState('1000');
-    const [dailyDiamondCap, setDailyDiamondCap] = useState('1');
-    const [treasuryPercent, setTreasuryPercent] = useState('0.5');
-
-    // Load initial config
-    useEffect(() => {
-        loadConfig();
-    }, []);
-
-    const loadConfig = async () => {
+    const loadTiers = async () => {
         try {
-            const { config } = await fetchConfig();
-            setConfig(config);
-            setReferralBonus(String(config.referrals?.bonus_diamonds ?? 0.5));
-            setOilPerWld(String(config.pricing?.oil_per_wld ?? 1000));
-            setOilPerUsdc(String(config.pricing?.oil_per_usdc ?? 1000));
-            setDailyDiamondCap(String(config.diamond_controls?.daily_cap_per_user ?? 1));
-            setTreasuryPercent(String(config.treasury?.payout_percentage ?? 0.5));
+            const data = await fetchTable('machine_tiers');
+            setTiers(data.sort((a: any, b: any) => a.cost_wld - b.cost_wld));
         } catch (err) {
             console.error(err);
         }
     };
 
-    const handleSave = async () => {
-        if (!confirm('Are you sure you want to update global game settings?')) return;
+    useEffect(() => { loadTiers(); }, []);
+
+    const handleUpdate = async (id: string, updates: any) => {
         setLoading(true);
         try {
-            const updates = {
-                'referrals.bonus_diamonds': parseFloat(referralBonus),
-                'pricing.oil_per_wld': parseFloat(oilPerWld),
-                'pricing.oil_per_usdc': parseFloat(oilPerUsdc),
-                'diamond_controls.daily_cap_per_user': parseFloat(dailyDiamondCap),
-                'treasury.payout_percentage': parseFloat(treasuryPercent),
-            };
-
-            await updateConfig(updates);
-            toast({ title: 'Config Updated', description: 'Game settings saved successfully.', className: 'glow-green' });
-            await loadConfig(); // Reload to confirm
+            await updateTableRow('machine_tiers', id, updates);
+            toast({ title: 'Tier Updated', description: `Saved changes for ${id}` });
+            await loadTiers();
         } catch (err: any) {
             toast({ title: 'Update Failed', description: err.message, variant: 'destructive' });
         } finally {
@@ -343,69 +324,190 @@ const GlobalSettings = () => {
     return (
         <div className="space-y-3">
             <h3 className="font-bold flex items-center gap-2 text-sm uppercase tracking-wider text-muted-foreground">
-                <Settings className="w-4 h-4" /> Global Settings
+                <Settings className="w-4 h-4" /> Machine Tiers (WLD Pricing)
             </h3>
-            <Card className="bg-secondary/20 border-border/50">
-                <CardHeader className="p-4 pb-2">
-                    <CardTitle className="text-base text-primary">Game Configuration</CardTitle>
-                    <CardDescription className="text-xs">Edit core game parameters live.</CardDescription>
+            <div className="grid gap-4">
+                {tiers.map((tier) => (
+                    <Card key={tier.id} className="bg-secondary/20 border-border/50">
+                        <CardHeader className="p-4 pb-0 flex flex-row items-center justify-between space-y-0">
+                            <CardTitle className="text-sm font-bold capitalize">{tier.name || tier.id}</CardTitle>
+                            <div className="text-[10px] text-muted-foreground font-mono uppercase">{tier.id}</div>
+                        </CardHeader>
+                        <CardContent className="p-4 space-y-3">
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1">
+                                    <label className="text-[10px] text-muted-foreground font-bold uppercase">WLD Cost</label>
+                                    <Input
+                                        type="number"
+                                        defaultValue={tier.cost_wld}
+                                        onBlur={(e) => handleUpdate(tier.id, { cost_wld: parseFloat(e.target.value) })}
+                                        className="h-8 text-sm bg-black/40"
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] text-muted-foreground font-bold uppercase">Speed (Actions/hr)</label>
+                                    <Input
+                                        type="number"
+                                        defaultValue={tier.speed_actions_per_hour}
+                                        onBlur={(e) => handleUpdate(tier.id, { speed_actions_per_hour: parseFloat(e.target.value) })}
+                                        className="h-8 text-sm bg-black/40"
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] text-muted-foreground font-bold uppercase">Fuel Burn/hr</label>
+                                    <Input
+                                        type="number"
+                                        defaultValue={tier.oil_burn_per_hour}
+                                        onBlur={(e) => handleUpdate(tier.id, { oil_burn_per_hour: parseFloat(e.target.value) })}
+                                        className="h-8 text-sm bg-black/40"
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] text-muted-foreground font-bold uppercase">Tank Capacity</label>
+                                    <Input
+                                        type="number"
+                                        defaultValue={tier.tank_capacity}
+                                        onBlur={(e) => handleUpdate(tier.id, { tank_capacity: parseFloat(e.target.value) })}
+                                        className="h-8 text-sm bg-black/40"
+                                    />
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                ))}
+            </div>
+        </div>
+    );
+};
+
+const MineralConfigsEditor = () => {
+    const { toast } = useToast();
+    const [loading, setLoading] = useState(false);
+    const [minerals, setMinerals] = useState<any[]>([]);
+
+    const loadMinerals = async () => {
+        try {
+            const data = await fetchTable('mineral_configs');
+            setMinerals(data.sort((a: any, b: any) => a.oil_value - b.oil_value));
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
+    useEffect(() => { loadMinerals(); }, []);
+
+    const handleUpdate = async (id: string, updates: any) => {
+        setLoading(true);
+        try {
+            await updateTableRow('mineral_configs', id, updates);
+            toast({ title: 'Mineral Updated', description: `Saved changes for ${id}` });
+            await loadMinerals();
+        } catch (err: any) {
+            toast({ title: 'Update Failed', description: err.message, variant: 'destructive' });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div className="space-y-3">
+            <h3 className="font-bold flex items-center gap-2 text-sm uppercase tracking-wider text-muted-foreground">
+                <Settings className="w-4 h-4" /> Mineral Rewards & Rates
+            </h3>
+            <div className="grid grid-cols-2 gap-3">
+                {minerals.map((m) => (
+                    <Card key={m.id} className="bg-secondary/20 border-border/50">
+                        <CardHeader className="p-3 pb-0">
+                            <CardTitle className="text-[10px] font-bold uppercase opacity-60 tracking-widest">{m.name || m.id}</CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-3 space-y-2">
+                            <div className="space-y-1">
+                                <label className="text-[9px] text-muted-foreground font-bold uppercase italic">OIL Value</label>
+                                <Input
+                                    type="number"
+                                    step="0.1"
+                                    defaultValue={m.oil_value}
+                                    onBlur={(e) => handleUpdate(m.id, { oil_value: parseFloat(e.target.value) })}
+                                    className="h-7 text-xs bg-black/40 border-primary/20"
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-[9px] text-muted-foreground font-bold uppercase italic">Drop Rate (0-1)</label>
+                                <Input
+                                    type="number"
+                                    step="0.01"
+                                    defaultValue={m.drop_rate}
+                                    onBlur={(e) => handleUpdate(m.id, { drop_rate: parseFloat(e.target.value) })}
+                                    className="h-7 text-xs bg-black/40 border-primary/20"
+                                />
+                            </div>
+                        </CardContent>
+                    </Card>
+                ))}
+            </div>
+        </div>
+    );
+};
+
+const GlobalSettings = () => {
+    const { toast } = useToast();
+    const [loading, setLoading] = useState(false);
+    const [settings, setSettings] = useState<any[]>([]);
+
+    const loadSettings = async () => {
+        try {
+            const data = await fetchTable('global_game_settings');
+            setSettings(data);
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
+    useEffect(() => { loadSettings(); }, []);
+
+    const handleUpdate = async (key: string, value: number) => {
+        setLoading(true);
+        try {
+            await updateGlobalSetting(key, value);
+            toast({ title: 'Setting Updated', description: `${key} saved.` });
+            await loadSettings();
+        } catch (err: any) {
+            toast({ title: 'Update Failed', description: err.message, variant: 'destructive' });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div className="space-y-3">
+            <h3 className="font-bold flex items-center gap-2 text-sm uppercase tracking-wider text-muted-foreground">
+                <Settings className="w-4 h-4" /> Global Economy Rules
+            </h3>
+            <Card className="bg-secondary/20 border-border/50 overflow-hidden">
+                <CardHeader className="p-4 pb-2 bg-black/20">
+                    <CardTitle className="text-sm text-primary uppercase tracking-wider">Dynamic Multipliers</CardTitle>
+                    <CardDescription className="text-[10px]">Changes take effect for all players immediately.</CardDescription>
                 </CardHeader>
                 <CardContent className="p-4 space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <label className="text-xs font-bold text-muted-foreground">Referral Bonus (💎)</label>
-                            <Input
-                                type="number"
-                                step="0.1"
-                                value={referralBonus}
-                                onChange={(e) => setReferralBonus(e.target.value)}
-                                className="bg-black/20"
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-xs font-bold text-muted-foreground">Avg. Daily Diamond Cap</label>
-                            <Input
-                                type="number"
-                                value={dailyDiamondCap}
-                                onChange={(e) => setDailyDiamondCap(e.target.value)}
-                                className="bg-black/20"
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-xs font-bold text-muted-foreground">Oil per WLD</label>
-                            <Input
-                                type="number"
-                                value={oilPerWld}
-                                onChange={(e) => setOilPerWld(e.target.value)}
-                                className="bg-black/20"
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-xs font-bold text-muted-foreground">Oil per USDC</label>
-                            <Input
-                                type="number"
-                                value={oilPerUsdc}
-                                onChange={(e) => setOilPerUsdc(e.target.value)}
-                                className="bg-black/20"
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-xs font-bold text-muted-foreground">Treasury Payout %</label>
-                            <Input
-                                type="number"
-                                step="0.05"
-                                max="1.0"
-                                value={treasuryPercent}
-                                onChange={(e) => setTreasuryPercent(e.target.value)}
-                                className="bg-black/20"
-                            />
-                        </div>
+                    <div className="grid gap-3">
+                        {settings.map((s) => (
+                            <div key={s.key} className="flex items-center justify-between gap-4 p-2 rounded bg-black/10 border border-white/5">
+                                <div className="flex-1">
+                                    <div className="text-[10px] font-bold uppercase text-muted-foreground">{s.key.replace(/_/g, ' ')}</div>
+                                    <div className="text-[9px] opacity-40 italic">{s.description}</div>
+                                </div>
+                                <div className="w-24">
+                                    <Input
+                                        type="number"
+                                        step="0.001"
+                                        defaultValue={s.value}
+                                        onBlur={(e) => handleUpdate(s.key, parseFloat(e.target.value))}
+                                        className="h-7 text-xs bg-black/40 border-primary/10 text-right font-mono"
+                                    />
+                                </div>
+                            </div>
+                        ))}
                     </div>
-
-                    <Button className="w-full mt-4" onClick={handleSave} disabled={loading}>
-                        {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
-                        Save Changes
-                    </Button>
                 </CardContent>
             </Card>
         </div>

@@ -28,6 +28,7 @@ export interface GameConfig {
   };
   machines: Record<MachineType, {
     cost_oil: number;
+    cost_wld?: number;
     speed_actions_per_hour: number;
     oil_burn_per_hour: number;
     tank_capacity: number;

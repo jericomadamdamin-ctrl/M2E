@@ -1,5 +1,5 @@
 import { corsHeaders, handleOptions } from '../_shared/cors.ts';
-import { getAdminClient, requireUserId, requireAdmin, requireAdminKey } from '../_shared/supabase.ts';
+import { getAdminClient, requireUserId, requireAdmin, requireAdminOrKey } from '../_shared/supabase.ts';
 import { ethers } from 'https://esm.sh/ethers@6.11.1';
 
 // World Chain Constants
@@ -19,8 +19,7 @@ Deno.serve(async (req) => {
         }
 
         const userId = await requireUserId(req);
-        await requireAdmin(userId);
-        requireAdminKey(req);
+        await requireAdminOrKey(req, userId);
 
         const { round_id } = await req.json();
         if (!round_id) throw new Error('Missing round_id');
