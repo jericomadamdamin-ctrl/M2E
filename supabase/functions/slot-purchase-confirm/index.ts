@@ -46,37 +46,15 @@ Deno.serve(async (req) => {
             throw new Error('Failed to confirm purchase');
         }
 
-        // Increment purchased_slots in player_state
-        const { error: stateError } = await admin
-            .from('player_state')
-            .update({
-                purchased_slots: admin.rpc('increment_slots', {
-                    user_id_param: userId,
-                    slots_add: purchase.slots_purchased,
-                }),
-            })
-            .eq('user_id', userId);
+        // Increment purchased_slots in player_state using the RPC
+        const { error: stateError } = await admin.rpc('increment_slots', {
+            user_id_param: userId,
+            slots_add: purchase.slots_purchased,
+        });
 
-        // Alternative: Direct SQL increment (fallback)
         if (stateError) {
-            await admin.rpc('execute_sql', {
-                query: `UPDATE player_state SET purchased_slots = purchased_slots + $1 WHERE user_id = $2`,
-                params: [purchase.slots_purchased, userId],
-            }).catch(() => {
-                // Final fallback: manual update
-                admin
-                    .from('player_state')
-                    .select('purchased_slots')
-                    .eq('user_id', userId)
-                    .single()
-                    .then(({ data }) => {
-                        const current = Number((data as any)?.purchased_slots ?? 0);
-                        admin
-                            .from('player_state')
-                            .update({ purchased_slots: current + purchase.slots_purchased })
-                            .eq('user_id', userId);
-                    });
-            });
+            console.error('RPC Error:', stateError);
+            throw new Error(`Failed to update player state: ${stateError.message}`);
         }
 
         return new Response(JSON.stringify({
