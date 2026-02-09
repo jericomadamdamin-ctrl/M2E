@@ -1,8 +1,10 @@
 import { MiniKit } from '@worldcoin/minikit-js';
 
-type MiniKitEnsureResult =
+export type MiniKitErrorReason = 'outside_of_worldapp' | 'app_out_of_date' | 'unknown' | 'not_ready';
+
+export type MiniKitEnsureResult =
   | { ok: true }
-  | { ok: false; reason: 'outside_of_worldapp' | 'app_out_of_date' | 'unknown' | 'not_ready' };
+  | { ok: false; reason: MiniKitErrorReason };
 
 export const ensureMiniKit = (): MiniKitEnsureResult => {
   if (typeof window === 'undefined') {
@@ -14,7 +16,7 @@ export const ensureMiniKit = (): MiniKitEnsureResult => {
   }
 
   const appId = import.meta.env.VITE_WORLD_APP_ID || undefined;
-  const installResult = MiniKit.install(appId);
+  const installResult = MiniKit.install(appId) as any;
 
   if (installResult.success) {
     return { ok: true };
@@ -31,7 +33,7 @@ export const ensureMiniKit = (): MiniKitEnsureResult => {
   return { ok: false, reason: 'unknown' };
 };
 
-export const getMiniKitErrorMessage = (reason: MiniKitEnsureResult['reason']) => {
+export const getMiniKitErrorMessage = (reason: MiniKitErrorReason) => {
   switch (reason) {
     case 'outside_of_worldapp':
       return 'Open this mini app inside World App to continue.';

@@ -1,6 +1,8 @@
 import { GameConfig, Machine, MachineType } from '@/types/game';
 import { Button } from '@/components/ui/button';
-import { ShoppingCart, Zap, Clock, Droplet, Plus } from 'lucide-react';
+import { ShoppingCart, Zap, Clock, Droplet, Plus, Loader2 } from 'lucide-react';
+import { useState } from 'react';
+import { useToast } from "@/components/ui/use-toast";
 import miningMachineIcon from '@/assets/machines/mining-machine.png';
 import heavyMachineIcon from '@/assets/machines/heavy-machine.png';
 import lightMachineIcon from '@/assets/machines/light-machine.png';
@@ -40,6 +42,30 @@ export const ShopTab = ({ config, oilBalance, machines, maxSlots, onBuy, onBuySl
   const atSlotLimit = machines.length >= maxSlots;
   const slotConfig = config.slots ?? { base_slots: 10, max_total_slots: 30, slot_pack_price_wld: 1, slot_pack_size: 5 };
   const canBuyMoreSlots = maxSlots < slotConfig.max_total_slots && onBuySlots;
+
+  const [buyingType, setBuyingType] = useState<MachineType | null>(null);
+  const { toast } = useToast();
+
+  const handleBuy = async (type: MachineType) => {
+    setBuyingType(type);
+    toast({
+      title: "Purchase Initiated",
+      description: "Processing your purchase...",
+    });
+
+    try {
+      await onBuy(type);
+    } catch (e) {
+      console.error(e);
+      toast({
+        title: "Purchase Failed",
+        description: "Could not complete purchase. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setTimeout(() => setBuyingType(null), 2000);
+    }
+  };
 
   return (
     <div className="space-y-4 pb-4">
@@ -84,12 +110,17 @@ export const ShopTab = ({ config, oilBalance, machines, maxSlots, onBuy, onBuySl
           .map(type => {
             const template = config.machines[type];
             const owned = getMachineCount(type);
-            const canAfford = oilBalance >= template.cost_oil && !atSlotLimit;
+            // Check affordability based on currency type
+            const isWldPurchase = (template.cost_wld || 0) > 0;
+            const cost = isWldPurchase ? template.cost_wld : template.cost_oil;
+            const canAfford = isWldPurchase ? true : oilBalance >= (template.cost_oil || 0);
+            const isAffordableAndSlotAvailable = canAfford && !atSlotLimit;
+            const isBuying = buyingType === type;
 
             return (
               <div
                 key={type}
-                className={`card-game rounded-xl p-4 transition-all duration-300 ${canAfford ? 'hover:glow-green' : 'opacity-60'
+                className={`card-game rounded-xl p-4 transition-all duration-300 ${isAffordableAndSlotAvailable ? 'hover:glow-green' : 'opacity-60'
                   }`}
               >
                 <div className="flex gap-4">
@@ -142,17 +173,17 @@ export const ShopTab = ({ config, oilBalance, machines, maxSlots, onBuy, onBuySl
                         <div className="flex items-center gap-1">
                           <span className="text-primary text-lg font-pixel-small">W</span>
                           <span className={`font-bold text-lg ${canAfford ? 'text-primary' : 'text-white/40'}`}>
-                            {(template.cost_wld || 0).toLocaleString()} <span className="text-xs">WLD</span>
+                            {(isWldPurchase ? template.cost_wld : template.cost_oil)?.toLocaleString()} <span className="text-xs">{isWldPurchase ? 'WLD' : 'OIL'}</span>
                           </span>
                         </div>
                       </div>
                       <Button
-                        onClick={() => onBuy(type)}
-                        disabled={atSlotLimit}
-                        className={`${!atSlotLimit ? 'glow-green' : ''}`}
+                        onClick={() => handleBuy(type)}
+                        disabled={atSlotLimit || !canAfford || !!buyingType}
+                        className={`${!atSlotLimit && canAfford ? 'glow-green' : ''}`}
                       >
-                        <ShoppingCart className="w-4 h-4 mr-2" />
-                        {atSlotLimit ? 'No Slots' : 'Buy Now'}
+                        {isBuying ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <ShoppingCart className="w-4 h-4 mr-2" />}
+                        {atSlotLimit ? 'No Slots' : isBuying ? 'Processing...' : 'Buy Now'}
                       </Button>
                     </div>
                   </div>

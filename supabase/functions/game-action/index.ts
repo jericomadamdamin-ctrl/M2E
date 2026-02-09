@@ -163,6 +163,7 @@ Deno.serve(async (req) => {
 
     if (action === 'discard_machine') {
       const machineId = payload?.machineId as string;
+      console.log(`Backend: Action discard_machine for machineId: ${machineId} from user: ${userId}`);
       const machine = machines.find((m) => m.id === machineId);
 
       if (!machine) throw new Error('Machine not found');

@@ -14,6 +14,7 @@ type SecurityEventType =
     | 'purchase_confirmed'
     | 'purchase_failed'
     | 'game_action'
+    | 'machine_discarded'
     | 'admin_action'
     | 'anomaly_detected';
 

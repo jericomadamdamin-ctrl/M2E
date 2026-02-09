@@ -1,14 +1,25 @@
 import { Machine, GameConfig, MachineType } from '@/types/game';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { Play, Square, Droplet, Plus } from 'lucide-react';
-import { Trash2 } from 'lucide-react';
-import { useMemo } from 'react';
+import { Play, Square, Droplet, Plus, Trash2, ArrowUpCircle } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useToast } from "@/components/ui/use-toast";
 import miningMachineIcon from '@/assets/machines/mining-machine.png';
 import heavyMachineIcon from '@/assets/machines/heavy-machine.png';
 import lightMachineIcon from '@/assets/machines/light-machine.png';
 import miniMachineIcon from '@/assets/machines/mini-machine.png';
 import { formatCompactNumber } from '@/lib/format';
+import { getUpgradeCost } from '@/hooks/useGameState';
 
 interface MiningTabProps {
   userMachines: Machine[];
@@ -75,6 +86,53 @@ export const MiningTab = ({
     });
   }, [userMachines, config]);
 
+  const [discardId, setDiscardId] = useState<string | null>(null);
+  const [upgradeId, setUpgradeId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const { toast } = useToast();
+
+  const handleFuel = (id: string) => {
+    onFuel(id);
+    toast({
+      title: "Refueling Initiated",
+      description: "Machine is being refueled...",
+      duration: 2000,
+    });
+  };
+
+  const confirmDiscard = () => {
+    if (discardId && onDiscard) {
+      setDeletingId(discardId);
+      // Delay actual discard to show animation
+      setTimeout(() => {
+        onDiscard(discardId);
+        setDiscardId(null);
+        setDeletingId(null);
+        toast({
+          title: "Machine Discarded",
+          description: "The machine has been permanently removed.",
+          variant: "destructive",
+        });
+      }, 500);
+    }
+  };
+
+  const confirmUpgrade = () => {
+    if (upgradeId && onUpgrade) {
+      onUpgrade(upgradeId);
+      setUpgradeId(null);
+      toast({
+        title: "Upgrade Initiated",
+        description: "Machine upgrade is in progress...",
+      });
+    }
+  };
+
+  const activeMachineForUpgrade = upgradeId ? userMachines.find(m => m.id === upgradeId) : null;
+  const upgradeCost = activeMachineForUpgrade && config
+    ? getUpgradeCost(config, activeMachineForUpgrade.type, activeMachineForUpgrade.level)
+    : 0;
+
   const atSlotLimit = userMachines.length >= maxSlots;
   const slotConfig = config.slots ?? { base_slots: 10, max_total_slots: 30, slot_pack_price_wld: 1, slot_pack_size: 5 };
   const canBuyMoreSlots = maxSlots < slotConfig.max_total_slots && onBuySlots;
@@ -122,7 +180,8 @@ export const MiningTab = ({
         return (
           <div
             key={machine.id}
-            className={`card-game rounded-xl p-4 ${machine.isActive ? 'glow-green' : ''}`}
+            className={`card-game rounded-xl p-4 transition-all duration-300 animate-in fade-in zoom-in duration-300 ${machine.isActive ? 'glow-green' : ''
+              } ${deletingId === machine.id ? 'opacity-0 scale-95 translate-y-4' : 'opacity-100 scale-100'}`}
           >
             <div className="flex gap-4">
               {/* Machine Icon & Status */}
@@ -200,8 +259,8 @@ export const MiningTab = ({
                   <Button
                     size="sm"
                     variant="secondary"
-                    className="h-8 text-xs transition-transform active:scale-95"
-                    onClick={() => onFuel(machine.id)}
+                    className="h-8 text-xs transition-transform active:scale-95 glow-green"
+                    onClick={() => handleFuel(machine.id)}
                     disabled={!canFuel}
                   >
                     <Droplet className="w-3 h-3 mr-1" />
@@ -226,9 +285,8 @@ export const MiningTab = ({
                       variant="outline"
                       className="h-8 w-8 text-xs border-destructive text-destructive hover:bg-destructive/20"
                       onClick={() => {
-                        if (window.confirm('Are you sure you want to DISCARD this machine? You will NOT get any refund. This action cannot be undone.')) {
-                          onDiscard(machine.id);
-                        }
+                        console.log('Discard clicked for machine:', machine.id);
+                        onDiscard(machine.id);
                       }}
                       title="Discard Machine (No Refund)"
                     >
@@ -264,6 +322,48 @@ export const MiningTab = ({
           </div>
         </div>
       ))}
+      {/* Discard Alert Dialog */}
+      <AlertDialog open={!!discardId} onOpenChange={(open) => !open && setDiscardId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Discard Machine?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to discard this machine? You will <span className="text-destructive font-bold">NOT</span> get any refund.
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDiscard} className="bg-destructive hover:bg-destructive/90">
+              Confirm Discard
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Upgrade Alert Dialog */}
+      <AlertDialog open={!!upgradeId} onOpenChange={(open) => !open && setUpgradeId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Upgrade Machine</AlertDialogTitle>
+            <AlertDialogDescription>
+              Upgrade this machine to Level {activeMachineForUpgrade ? activeMachineForUpgrade.level + 1 : ''}?
+              <br />
+              Cost: <span className="text-primary font-bold">{formatCompactNumber(upgradeCost)} OIL</span>
+              <br />
+              <span className="text-xs text-muted-foreground mt-2 block">
+                Upgrading increases mining speed, tank capacity, but also oil burn rate.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmUpgrade} disabled={oilBalance < upgradeCost}>
+              {oilBalance < upgradeCost ? 'Insufficient OIL' : 'Confirm Upgrade'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

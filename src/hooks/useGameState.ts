@@ -55,7 +55,7 @@ const getTankCapacity = (config: GameConfig, type: MachineType, level: number) =
   return getMultiplier(def.tank_capacity, level, config.progression.level_capacity_multiplier);
 };
 
-const getUpgradeCost = (config: GameConfig, type: MachineType, level: number) => {
+export const getUpgradeCost = (config: GameConfig, type: MachineType, level: number) => {
   const def = config.machines[type];
   return Math.floor(def.cost_oil * level * config.progression.upgrade_cost_multiplier);
 };
@@ -197,6 +197,7 @@ export const useGameState = () => {
     const machineId = (payload?.machineId as string | undefined) ?? undefined;
 
     const runAction = async () => {
+      console.log('useGameState: executeAction started:', action, payload);
       isMutatingRef.current = true;
       mutationSeqRef.current += 1;
       const prevPlayer = playerRef.current;
@@ -352,7 +353,7 @@ export const useGameState = () => {
     if (!miniKit.ok) {
       toast({
         title: 'World App required',
-        description: getMiniKitErrorMessage(miniKit.reason),
+        description: getMiniKitErrorMessage((miniKit as any).reason),
         variant: 'destructive',
       });
       return false;
@@ -419,11 +420,11 @@ export const useGameState = () => {
   }, []);
 
   const buySlots = async () => {
-    const miniKit = ensureMiniKit() as any;
+    const miniKit = ensureMiniKit();
     if (!miniKit.ok) {
       toast({
         title: 'World App required',
-        description: getMiniKitErrorMessage(miniKit.reason),
+        description: getMiniKitErrorMessage((miniKit as any).reason),
         variant: 'destructive',
       });
       return false;

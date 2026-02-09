@@ -103,7 +103,10 @@ const Index = () => {
             onStart={startMachine}
             onStop={stopMachine}
             onUpgrade={upgradeMachine}
-            onDiscard={discardMachine}
+            onDiscard={(id) => {
+              console.log('Index: onDiscard triggered for:', id);
+              discardMachine(id);
+            }}
             maxSlots={player.maxSlots ?? 10}
             onBuySlots={buySlots}
           />
