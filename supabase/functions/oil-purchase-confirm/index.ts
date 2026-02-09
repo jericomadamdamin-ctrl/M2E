@@ -136,7 +136,7 @@ Deno.serve(async (req) => {
         .eq('user_id', profile.referred_by)
         .single();
 
-      const newDiamonds = Number(referrerState?.diamond_balance || 0) + 1;
+      const newDiamonds = Number(referrerState?.diamond_balance || 0) + 0.5;
 
       await admin
         .from('player_state')
@@ -149,7 +149,7 @@ Deno.serve(async (req) => {
         .insert({
           referrer_id: profile.referred_by,
           referred_id: userId,
-          diamonds_awarded: 1,
+          diamonds_awarded: 0.5,
         });
 
       // Mark bonus as paid

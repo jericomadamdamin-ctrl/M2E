@@ -2,7 +2,7 @@ import { getAdminClient } from './supabase.ts';
 
 type GameConfig = {
   pricing: { oil_per_wld: number; oil_per_usdc: number; usdc_to_wld_rate?: number };
-  machines: Record<string, { cost_oil: number; speed_actions_per_hour: number; oil_burn_per_hour: number; tank_capacity: number; max_level: number }>;
+  machines: Record<string, { cost_oil: number; speed_actions_per_hour: number; oil_burn_per_hour: number; tank_capacity: number; max_level: number; name?: string; image_url?: string }>;
   mining: { action_rewards: { minerals: Record<string, { drop_rate: number; oil_value: number }>; diamond: { drop_rate_per_action: number } } };
   diamond_controls: { daily_cap_per_user: number; excess_diamond_oil_value: number };
   progression: { level_speed_multiplier: number; level_oil_burn_multiplier: number; level_capacity_multiplier: number; upgrade_cost_multiplier: number };
@@ -39,15 +39,42 @@ const getMultiplier = (base: number, level: number, perLevel: number) => {
 
 export async function getGameConfig(): Promise<GameConfig> {
   const admin = getAdminClient();
-  const { data, error } = await admin
+  const { data: configData, error: configError } = await admin
     .from('game_config')
     .select('value')
     .eq('key', 'current')
     .single();
-  if (error || !data) {
+
+  if (configError || !configData) {
     throw new Error('Missing game_config');
   }
-  return data.value as GameConfig;
+
+  const config = configData.value as GameConfig;
+
+  // Verify machine_tiers from DB to ensure extensibility and override JSON
+  const { data: machinesData, error: machinesError } = await admin
+    .from('machine_tiers')
+    .select('*')
+    .eq('is_enabled', true);
+
+  if (!machinesError && machinesData && machinesData.length > 0) {
+    const dbMachines: Record<string, any> = {};
+    machinesData.forEach((m) => {
+      dbMachines[m.id] = {
+        cost_oil: Number(m.cost_oil),
+        speed_actions_per_hour: Number(m.speed_actions_per_hour),
+        oil_burn_per_hour: Number(m.oil_burn_per_hour),
+        tank_capacity: Number(m.tank_capacity),
+        max_level: Number(m.max_level),
+        name: m.name,
+        image_url: m.image_url,
+      };
+    });
+    // Merge DB machines into config, overriding JSON defaults
+    config.machines = { ...config.machines, ...dbMachines };
+  }
+
+  return config;
 }
 
 export async function ensurePlayerState(userId: string): Promise<PlayerStateRow> {
@@ -237,12 +264,12 @@ export async function processMining(
     const u = updatesById.get(m.id);
     return u
       ? {
-          ...m,
-          fuel_oil: u.fuel_oil,
-          is_active: u.is_active,
-          last_processed_at: u.last_processed_at,
-          action_remainder: u.action_remainder,
-        }
+        ...m,
+        fuel_oil: u.fuel_oil,
+        is_active: u.is_active,
+        last_processed_at: u.last_processed_at,
+        action_remainder: u.action_remainder,
+      }
       : m;
   });
 
@@ -257,4 +284,18 @@ export function getTankCapacity(config: GameConfig, type: string, level: number)
 export function getUpgradeCost(config: GameConfig, type: string, level: number) {
   const base = config.machines[type]?.cost_oil ?? 0;
   return Math.floor(base * level * config.progression.upgrade_cost_multiplier);
+}
+
+// Helper to calculate total value for recycling (Base Cost + All Upgrades to current level)
+export function getTotalInvestment(config: GameConfig, machine: MachineRow) {
+  const machineConfig = config.machines[machine.type];
+  if (!machineConfig) return 0;
+
+  let total = machineConfig.cost_oil;
+  // Sum upgrade costs for levels 1 -> current level
+  // Note: Upgrading TO level 2 costs (base * 1 * mult). Upgrading TO level N costs (base * (N-1) * mult).
+  for (let l = 1; l < machine.level; l++) {
+    total += getUpgradeCost(config, machine.type, l);
+  }
+  return total;
 }

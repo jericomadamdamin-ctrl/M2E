@@ -32,6 +32,7 @@ const Index = () => {
     startMachine,
     stopMachine,
     upgradeMachine,
+    discardMachine,
     exchangeMineral,
     refresh,
     mutateState,
@@ -95,13 +96,14 @@ const Index = () => {
 
         {activeTab === 'mining' && config && (
           <MiningTab
-            machines={machines}
+            userMachines={machines}
             config={config}
             oilBalance={player.oilBalance}
             onFuel={fuelMachine}
             onStart={startMachine}
             onStop={stopMachine}
             onUpgrade={upgradeMachine}
+            onDiscard={discardMachine}
             maxSlots={player.maxSlots ?? 10}
             onBuySlots={buySlots}
           />

@@ -7,7 +7,10 @@ import lightMachineIcon from '@/assets/machines/light-machine.png';
 import miniMachineIcon from '@/assets/machines/mini-machine.png';
 import { formatCompactNumber } from '@/lib/format';
 
-const getMachineIcon = (type: MachineType) => {
+const getMachineIcon = (type: string, config?: GameConfig) => {
+  if (config?.machines[type]?.image_url) {
+    return config.machines[type].image_url;
+  }
   switch (type) {
     case 'mini':
       return miniMachineIcon;
@@ -92,7 +95,7 @@ export const ShopTab = ({ config, oilBalance, machines, maxSlots, onBuy, onBuySl
                 <div className="flex gap-4">
                   {/* Machine Icon */}
                   <div className="flex flex-col items-center justify-center">
-                    <img src={getMachineIcon(type)} alt={type} className="w-12 h-12 animate-float" />
+                    <img src={getMachineIcon(type, config)} alt={type} className="w-12 h-12 animate-float object-contain" />
                     {owned > 0 && (
                       <span className="mt-2 text-xs bg-primary/20 text-primary px-2 py-0.5 rounded-full font-bold">
                         Owned: {owned}
@@ -102,7 +105,7 @@ export const ShopTab = ({ config, oilBalance, machines, maxSlots, onBuy, onBuySl
 
                   {/* Machine Details */}
                   <div className="flex-1">
-                    <h3 className="font-bold mb-1 capitalize">{type} machine</h3>
+                    <h3 className="font-bold mb-1 capitalize">{template.name || `${type} machine`}</h3>
                     <p className="text-muted-foreground text-xs mb-3">
                       Speed, fuel burn, and capacity scale with upgrades.
                     </p>

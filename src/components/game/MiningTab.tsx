@@ -2,6 +2,7 @@ import { Machine, GameConfig, MachineType } from '@/types/game';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Play, Square, Droplet, Plus } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 import { useMemo } from 'react';
 import miningMachineIcon from '@/assets/machines/mining-machine.png';
 import heavyMachineIcon from '@/assets/machines/heavy-machine.png';
@@ -10,25 +11,32 @@ import miniMachineIcon from '@/assets/machines/mini-machine.png';
 import { formatCompactNumber } from '@/lib/format';
 
 interface MiningTabProps {
-  machines: Machine[];
+  userMachines: Machine[];
   config: GameConfig;
   oilBalance: number;
-  maxSlots?: number;
+  maxSlots: number;
   onFuel: (id: string, amount?: number) => void;
   onStart: (id: string) => void;
-  onStop: (id: string) => void;
-  onUpgrade: (id: string) => void;
+  onStop?: (id: string) => void;
+  onUpgrade?: (id: string) => void;
+  onDiscard?: (id: string) => void;
   onBuySlots?: () => void;
 }
 
-const MACHINE_NAMES: Record<string, string> = {
+// Deprecated: used as fallback
+const DEFAULT_MACHINE_NAMES: Record<string, string> = {
   mini: 'Mini Machine',
   light: 'Light Machine',
   heavy: 'Heavy Machine',
   mega: 'Mega Machine',
 };
 
-const getMachineIcon = (type: MachineType) => {
+const getMachineIcon = (type: string, config?: GameConfig) => {
+  if (config?.machines[type]?.image_url) {
+    // If it's a relative path starting with /, use origin. Otherwise assume full URL or require proper handling.
+    // For now, assuming these are /assets/... paths or full URLs.
+    return config.machines[type].image_url;
+  }
   switch (type) {
     case 'mini':
       return miniMachineIcon;
@@ -45,18 +53,29 @@ const getMultiplier = (base: number, level: number, perLevel: number) => {
   return base * (1 + Math.max(0, level - 1) * perLevel);
 };
 
-export const MiningTab = ({ machines, config, oilBalance, maxSlots = 10, onFuel, onStart, onStop, onUpgrade, onBuySlots }: MiningTabProps) => {
+export const MiningTab = ({
+  userMachines,
+  config,
+  oilBalance,
+  onFuel,
+  onStart,
+  onStop,
+  onUpgrade,
+  onDiscard,
+  maxSlots,
+  onBuySlots
+}: MiningTabProps) => {
   const machineStats = useMemo(() => {
-    return machines.map(machine => {
+    return userMachines.map(machine => {
       const def = config.machines[machine.type];
       const speed = getMultiplier(def.speed_actions_per_hour, machine.level, config.progression.level_speed_multiplier);
       const burn = getMultiplier(def.oil_burn_per_hour, machine.level, config.progression.level_oil_burn_multiplier);
       const capacity = getMultiplier(def.tank_capacity, machine.level, config.progression.level_capacity_multiplier);
       return { machine, speed, burn, capacity };
     });
-  }, [machines, config]);
+  }, [userMachines, config]);
 
-  const atSlotLimit = machines.length >= maxSlots;
+  const atSlotLimit = userMachines.length >= maxSlots;
   const slotConfig = config.slots ?? { base_slots: 10, max_total_slots: 30, slot_pack_price_wld: 1, slot_pack_size: 5 };
   const canBuyMoreSlots = maxSlots < slotConfig.max_total_slots && onBuySlots;
 
@@ -68,7 +87,7 @@ export const MiningTab = ({ machines, config, oilBalance, maxSlots = 10, onFuel,
           {atSlotLimit && (
             <div className="flex items-center gap-1 bg-destructive/20 text-destructive px-2 py-1 rounded-full text-xs animate-pulse">
               <span>🔧</span>
-              <span className="font-bold">{machines.length}/{maxSlots}</span>
+              <span className="font-bold">{userMachines.length}/{maxSlots}</span>
             </div>
           )}
           <div className="flex items-center gap-1 bg-secondary/50 px-3 py-1.5 rounded-full">
@@ -95,7 +114,7 @@ export const MiningTab = ({ machines, config, oilBalance, maxSlots = 10, onFuel,
         </div>
       )}
 
-      {machines.length === 0 ? (
+      {userMachines.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-full py-16 px-4">
           <div className="text-6xl mb-4 animate-float">⛏️</div>
           <h3 className="font-pixel text-primary text-sm mb-2 text-glow">No Machines</h3>
@@ -117,7 +136,7 @@ export const MiningTab = ({ machines, config, oilBalance, maxSlots = 10, onFuel,
                 {/* Machine Icon & Status */}
                 <div className="flex flex-col items-center">
                   <div className={`relative w-12 h-12 flex items-center justify-center ${machine.isActive ? 'animate-mining' : ''}`}>
-                    <img src={getMachineIcon(machine.type)} alt={machine.type} className="w-full h-full object-contain" />
+                    <img src={getMachineIcon(machine.type, config)} alt={machine.type} className="w-full h-full object-contain" />
                   </div>
                   <div className={`mt-2 px-2 py-0.5 rounded text-xs font-bold ${machine.isActive
                     ? 'bg-primary/20 text-primary'
@@ -130,7 +149,7 @@ export const MiningTab = ({ machines, config, oilBalance, maxSlots = 10, onFuel,
                 {/* Machine Info */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between mb-2">
-                    <h3 className="font-bold text-sm truncate">{MACHINE_NAMES[machine.type] || machine.type}</h3>
+                    <h3 className="font-bold text-sm truncate">{config.machines[machine.type]?.name || DEFAULT_MACHINE_NAMES[machine.type] || machine.type}</h3>
                     <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded font-bold">
                       Lv.{machine.level}/{config.machines[machine.type].max_level}
                     </span>
@@ -168,7 +187,7 @@ export const MiningTab = ({ machines, config, oilBalance, maxSlots = 10, onFuel,
                         size="sm"
                         variant="destructive"
                         className="flex-1 h-8 text-xs transition-transform active:scale-95"
-                        onClick={() => onStop(machine.id)}
+                        onClick={() => onStop?.(machine.id)}
                       >
                         <Square className="w-3 h-3 mr-1" />
                         Stop
@@ -201,12 +220,29 @@ export const MiningTab = ({ machines, config, oilBalance, maxSlots = 10, onFuel,
                       size="sm"
                       variant="outline"
                       className="h-8 w-8 text-xs border-accent text-accent hover:bg-accent/20 font-bold text-lg"
-                      onClick={() => onUpgrade(machine.id)}
+                      onClick={() => onUpgrade?.(machine.id)}
                       disabled={machine.level >= config.machines[machine.type].max_level}
                       title="Upgrade"
                     >
                       <Plus className="w-4 h-4" />
                     </Button>
+
+                    {/* Discard Button - Allow for ALL machines */}
+                    {onDiscard && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 w-8 text-xs border-destructive text-destructive hover:bg-destructive/20"
+                        onClick={() => {
+                          if (window.confirm('Are you sure you want to DISCARD this machine? You will NOT get any refund. This action cannot be undone.')) {
+                            onDiscard(machine.id);
+                          }
+                        }}
+                        title="Discard Machine (No Refund)"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    )}
                   </div>
                 </div>
               </div>

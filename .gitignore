@@ -24,3 +24,5 @@ dist-ssr
 *.sw?
 .env
 .env.example
+dummy_write.md
+roi_analysis_proposed.md

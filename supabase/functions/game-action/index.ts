@@ -1,6 +1,6 @@
 import { corsHeaders, handleOptions } from '../_shared/cors.ts';
 import { getAdminClient, requireUserId, requireHuman } from '../_shared/supabase.ts';
-import { ensurePlayerState, getGameConfig, getPlayerMachines, processMining, getTankCapacity, getUpgradeCost } from '../_shared/mining.ts';
+import { ensurePlayerState, getGameConfig, getPlayerMachines, processMining, getTankCapacity, getUpgradeCost, getTotalInvestment } from '../_shared/mining.ts';
 import { logSecurityEvent, extractClientInfo, checkRateLimit, isFeatureEnabled, validateRange } from '../_shared/security.ts';
 
 type MachineRow = Awaited<ReturnType<typeof processMining>>['machines'][number];
@@ -188,9 +188,50 @@ Deno.serve(async (req) => {
       const current = Number(updatedState.minerals?.[mineral] || 0);
       if (current < amount) throw new Error('Insufficient minerals');
 
-      const oilGain = amount * mineralDef.oil_value;
-      updatedState.minerals = { ...updatedState.minerals, [mineral]: current - amount };
       updatedState.oil_balance = Number(updatedState.oil_balance) + oilGain;
+    }
+
+    if (action === 'recycle_machine') {
+      const machineId = payload?.machineId as string;
+      const machine = machines.find((m) => m.id === machineId);
+
+      if (!machine) throw new Error('Machine not found');
+
+      const machineConfig = config.machines[machine.type];
+      if (!machineConfig) throw new Error('Invalid machine type');
+
+      // Requirement: Machine must be at MAX LEVEL (10)
+      const maxLevel = machineConfig.max_level || 10;
+      if (machine.level < maxLevel) {
+        throw new Error(`Machine must be at Max Level (${maxLevel}) to recycle.`);
+      }
+
+      // Calculate Refund: 60% of Total Investment (Base + Upgrades)
+      const totalInvestment = getTotalInvestment(config, machine);
+      const refundAmount = Math.floor(totalInvestment * 0.60);
+
+      // 1. Delete the machine
+      const { error: deleteError } = await admin
+        .from('player_machines')
+        .delete()
+        .eq('id', machineId)
+        .eq('user_id', userId);
+
+      if (deleteError) throw deleteError;
+
+      // 2. Credit Refund
+      updatedState.oil_balance = Number(updatedState.oil_balance) + refundAmount;
+
+      // Remove from memory list so the response is correct
+      machines = machines.filter(m => m.id !== machineId);
+
+      logSecurityEvent({
+        event_type: 'machine_recycled',
+        user_id: userId,
+        severity: 'info',
+        action,
+        details: { machineId, type: machine.type, totalInvestment, refundAmount },
+      });
     }
 
     await admin

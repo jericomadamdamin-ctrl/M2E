@@ -29,9 +29,16 @@ CREATE INDEX IF NOT EXISTS idx_suspicious_activity_type ON public.suspicious_act
 
 ALTER TABLE public.suspicious_activity ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Suspicious activity admin read"
-ON public.suspicious_activity FOR SELECT
-USING (EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.is_admin = true));
+DO $$ 
+BEGIN 
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE policyname = 'Suspicious activity admin read' AND tablename = 'suspicious_activity'
+  ) THEN
+    CREATE POLICY "Suspicious activity admin read"
+    ON public.suspicious_activity FOR SELECT
+    USING (EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.is_admin = true));
+  END IF;
+END $$;
 
 -- Shadow ban table (soft flags before hard bans)
 CREATE TABLE IF NOT EXISTS public.player_flags (
@@ -50,9 +57,16 @@ CREATE TABLE IF NOT EXISTS public.player_flags (
 
 ALTER TABLE public.player_flags ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Player flags admin only"
-ON public.player_flags FOR ALL
-USING (EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.is_admin = true));
+DO $$ 
+BEGIN 
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE policyname = 'Player flags admin only' AND tablename = 'player_flags'
+  ) THEN
+    CREATE POLICY "Player flags admin only"
+    ON public.player_flags FOR ALL
+    USING (EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.is_admin = true));
+  END IF;
+END $$;
 
 -- Idempotency keys for API protection (Phase 3)
 CREATE TABLE IF NOT EXISTS public.idempotency_keys (
@@ -89,13 +103,27 @@ CREATE TABLE IF NOT EXISTS public.player_statistics (
 
 ALTER TABLE public.player_statistics ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Player stats self read"
-ON public.player_statistics FOR SELECT
-USING (user_id = auth.uid());
+DO $$ 
+BEGIN 
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE policyname = 'Player stats self read' AND tablename = 'player_statistics'
+  ) THEN
+    CREATE POLICY "Player stats self read"
+    ON public.player_statistics FOR SELECT
+    USING (user_id = auth.uid());
+  END IF;
+END $$;
 
-CREATE POLICY "Player stats admin all"
-ON public.player_statistics FOR ALL
-USING (EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.is_admin = true));
+DO $$ 
+BEGIN 
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE policyname = 'Player stats admin all' AND tablename = 'player_statistics'
+  ) THEN
+    CREATE POLICY "Player stats admin all"
+    ON public.player_statistics FOR ALL
+    USING (EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.is_admin = true));
+  END IF;
+END $$;
 
 -- Function to update player statistics
 CREATE OR REPLACE FUNCTION update_player_stats(

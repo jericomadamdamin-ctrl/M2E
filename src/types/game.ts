@@ -1,5 +1,6 @@
 export type MineralType = 'bronze' | 'silver' | 'gold' | 'iron';
-export type MachineType = 'mini' | 'light' | 'heavy' | 'mega';
+export type MachineType = string;
+// export type MachineType = 'mini' | 'light' | 'heavy' | 'mega'; // Deprecated in favor of DB config
 
 export interface Machine {
   id: string;
@@ -31,6 +32,8 @@ export interface GameConfig {
     oil_burn_per_hour: number;
     tank_capacity: number;
     max_level: number;
+    name?: string;
+    image_url?: string;
   }>;
   mining: {
     action_rewards: {

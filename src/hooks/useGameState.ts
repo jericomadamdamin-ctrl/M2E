@@ -287,6 +287,12 @@ export const useGameState = () => {
           toast({ title: 'Mining Started!', description: 'Machine is now active.', className: 'glow-green' });
         } else if (action === 'stop_machine') {
           toast({ title: 'Mining Stopped', description: 'Machine halted.' });
+        } else if (action === 'discard_machine') {
+          toast({
+            title: 'Machine Discarded',
+            description: 'Machine removed. Slot freed.',
+            className: 'text-destructive',
+          });
         }
       } catch (err) {
         const message = getErrorMessage(err);
@@ -348,6 +354,7 @@ export const useGameState = () => {
   const startMachine = useCallback((machineId: string) => executeAction('start_machine', { machineId }), [executeAction]);
   const stopMachine = useCallback((machineId: string) => executeAction('stop_machine', { machineId }), [executeAction]);
   const upgradeMachine = useCallback((machineId: string) => executeAction('upgrade_machine', { machineId }), [executeAction]);
+  const discardMachine = useCallback((machineId: string) => executeAction('discard_machine', { machineId }), [executeAction]);
   const exchangeMineral = useCallback((mineral: MineralType, amount: number) => executeAction('exchange_minerals', { mineral, amount }), [executeAction]);
 
   const mutateState = useCallback((updater: (prev: PlayerState) => PlayerState) => {
@@ -433,6 +440,7 @@ export const useGameState = () => {
     startMachine,
     stopMachine,
     upgradeMachine,
+    discardMachine,
     exchangeMineral,
     refresh,
     mutateState: setPlayer,

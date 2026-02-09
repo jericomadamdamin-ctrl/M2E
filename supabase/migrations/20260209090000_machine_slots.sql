@@ -33,10 +33,24 @@ CREATE TABLE IF NOT EXISTS public.slot_purchases (
 ALTER TABLE public.slot_purchases ENABLE ROW LEVEL SECURITY;
 
 -- RLS: user can read own purchases
-CREATE POLICY "Slot purchases read"
-ON public.slot_purchases FOR SELECT
-USING (auth.uid() = user_id);
+DO $$ 
+BEGIN 
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE policyname = 'Slot purchases read' AND tablename = 'slot_purchases'
+  ) THEN
+    CREATE POLICY "Slot purchases read"
+    ON public.slot_purchases FOR SELECT
+    USING (auth.uid() = user_id);
+  END IF;
+END $$;
 
-CREATE POLICY "Slot purchases insert"
-ON public.slot_purchases FOR INSERT
-WITH CHECK (auth.uid() = user_id);
+DO $$ 
+BEGIN 
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE policyname = 'Slot purchases insert' AND tablename = 'slot_purchases'
+  ) THEN
+    CREATE POLICY "Slot purchases insert"
+    ON public.slot_purchases FOR INSERT
+    WITH CHECK (auth.uid() = user_id);
+  END IF;
+END $$;
