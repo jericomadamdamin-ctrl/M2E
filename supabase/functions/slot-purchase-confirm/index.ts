@@ -1,6 +1,10 @@
 import { corsHeaders, handleOptions } from '../_shared/cors.ts';
 import { getAdminClient, requireUserId, requireHuman } from '../_shared/supabase.ts';
 
+import { logSecurityEvent, extractClientInfo } from '../_shared/security.ts';
+
+const DEV_PORTAL_API = 'https://developer.worldcoin.org/api/v2/minikit/transaction';
+
 Deno.serve(async (req) => {
     const preflight = handleOptions(req);
     if (preflight) return preflight;
@@ -16,9 +20,18 @@ Deno.serve(async (req) => {
         const userId = await requireUserId(req);
         await requireHuman(userId);
 
-        const { reference } = await req.json();
-        if (!reference) {
-            throw new Error('Missing reference');
+        const { payload } = await req.json();
+        // Fallback for old requests (though we are fixing it now)
+        const reference = payload?.reference;
+
+        if (!reference || !payload?.transaction_id) {
+            throw new Error('Missing payment payload');
+        }
+
+        const appId = Deno.env.get('WORLD_APP_ID') || Deno.env.get('APP_ID');
+        const apiKey = Deno.env.get('DEV_PORTAL_API_KEY') || Deno.env.get('WORLD_ID_API_KEY');
+        if (!appId || !apiKey) {
+            throw new Error('Missing developer portal credentials');
         }
 
         const admin = getAdminClient();
@@ -29,11 +42,63 @@ Deno.serve(async (req) => {
             .select('*')
             .eq('reference', reference)
             .eq('user_id', userId)
-            .eq('status', 'pending')
             .single();
 
         if (findError || !purchase) {
-            throw new Error('Slot purchase not found or already processed');
+            throw new Error('Slot purchase not found');
+        }
+
+        if (purchase.status === 'confirmed') {
+            return new Response(JSON.stringify({ ok: true, status: 'confirmed', message: 'Already confirmed' }), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
+        }
+
+        // Verify Transaction
+        const verifyRes = await fetch(`${DEV_PORTAL_API}/${payload.transaction_id}?app_id=${appId}&type=payment`, {
+            headers: { Authorization: `Bearer ${apiKey}` },
+        });
+
+        if (!verifyRes.ok) {
+            throw new Error('Failed to verify transaction');
+        }
+
+        const tx = await verifyRes.json();
+
+        if (tx?.reference && tx.reference !== reference) {
+            throw new Error('Reference mismatch');
+        }
+
+        // Validation: Amount
+        if (tx?.input_token?.amount) {
+            const txAmount = parseFloat(tx.input_token.amount);
+            const expectedAmount = Number(purchase.amount_wld);
+            if (txAmount < expectedAmount * 0.99) {
+                const clientInfo = extractClientInfo(req);
+                logSecurityEvent({
+                    event_type: 'suspicious_activity',
+                    user_id: userId,
+                    severity: 'critical',
+                    action: 'underpayment_attempt',
+                    details: { expected: expectedAmount, received: txAmount, reference },
+                    ...clientInfo,
+                });
+                throw new Error('Transaction amount mismatch');
+            }
+        }
+
+        if (tx?.transaction_status === 'failed') {
+            await admin
+                .from('slot_purchases')
+                .update({ status: 'failed' })
+                .eq('id', purchase.id);
+            throw new Error('Transaction failed on-chain');
+        }
+
+        if (tx?.transaction_status && tx.transaction_status !== 'mined') {
+            return new Response(JSON.stringify({ ok: true, status: tx.transaction_status }), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
         }
 
         // Mark as confirmed
@@ -56,6 +121,14 @@ Deno.serve(async (req) => {
             console.error('RPC Error:', stateError);
             throw new Error(`Failed to update player state: ${stateError.message}`);
         }
+
+        logSecurityEvent({
+            event_type: 'purchase_confirmed',
+            user_id: userId,
+            severity: 'info',
+            action: 'slot_purchase',
+            details: { slots: purchase.slots_purchased, amount: purchase.amount_wld, reference },
+        });
 
         return new Response(JSON.stringify({
             ok: true,
