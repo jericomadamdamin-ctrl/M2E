@@ -73,10 +73,14 @@ export async function requireAdmin(userId: string) {
     throw new Error('Admin privileges required');
   }
 
+  /* 
+  // Trusted Admin Check: relying on is_admin flag in DB.
+  // The env var check is too strict for flexible team access.
   const allowedWallet = Deno.env.get('ADMIN_WALLET_ADDRESS');
   if (allowedWallet && (!data.wallet_address || data.wallet_address.toLowerCase() !== allowedWallet.toLowerCase())) {
     throw new Error('Unauthorized admin wallet');
-  }
+  } 
+  */
 }
 
 export async function requireAdminOrKey(req: Request, userId: string) {
