@@ -35,6 +35,8 @@ export const AdminUsers = ({ accessKey }: { accessKey?: string }) => {
             const playerStates = await fetchTable('player_state', accessKey) || [];
 
             // Join data
+            const stateMap = new Map(playerStates.map((s: any) => [s.user_id, s]));
+
             const joinedData: UserData[] = (profiles as any[]).map((p: any) => {
                 const state = stateMap.get(p.id) as any;
                 return {
