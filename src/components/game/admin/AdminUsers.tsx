@@ -28,16 +28,16 @@ export const AdminUsers = ({ accessKey }: { accessKey?: string }) => {
         setLoading(true);
         try {
             // Fetch profiles
-            const profiles = await fetchUsers(accessKey);
+            const profiles = await fetchUsers(accessKey) || [];
 
             // Fetch player state
             // We use generic fetchTable for this as established in backend.ts
-            const playerStates = await fetchTable('player_state', accessKey);
+            const playerStates = await fetchTable('player_state', accessKey) || [];
 
             // Join data
             const stateMap = new Map(playerStates.map((s: any) => [s.user_id, s]));
 
-            const joinedData: UserData[] = profiles.map((p: any) => ({
+            const joinedData: UserData[] = (profiles as any[]).map((p: any) => ({
                 id: p.id,
                 player_name: p.player_name || 'Anonymous',
                 wallet_address: p.wallet_address || '',

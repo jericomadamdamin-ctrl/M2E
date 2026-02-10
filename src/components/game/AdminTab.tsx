@@ -134,7 +134,7 @@ export const AdminTab = ({ config }: AdminTabProps) => {
                 </TabsContent>
 
                 <TabsContent value="users">
-                    <AdminUsers />
+                    <AdminUsers accessKey={accessKey} />
                 </TabsContent>
 
                 <TabsContent value="financials">

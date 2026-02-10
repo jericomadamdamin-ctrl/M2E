@@ -67,7 +67,7 @@ export async function requireAdmin(userId: string) {
     .from('profiles')
     .select('is_admin, wallet_address')
     .eq('id', userId)
-    .single();
+    .maybeSingle();
 
   if (error || !data?.is_admin) {
     throw new Error('Admin privileges required');
@@ -94,12 +94,7 @@ export async function requireAdminOrKey(req: Request, userId: string) {
       .from('profiles')
       .select('wallet_address, is_admin')
       .eq('id', userId)
-      .single();
-
-    // Relaxed check: Trust the key. 
-    // Only enforce wallet if explicitly critical, but properly handling the key is usually enough.
-    // The previous check was:
-    // if (allowedWallet && profile?.wallet_address?.toLowerCase() !== allowedWallet.toLowerCase()) { ... }
+      .maybeSingle();
 
     // Auto-promote if key is valid
     if (profile && !profile.is_admin) {
@@ -140,50 +135,60 @@ export async function requireHuman(userId: string) {
   }
 }
 export async function verifyAdmin(req: Request): Promise<void> {
-  // 1. Environment Check: Enforce MiniApp User-Agent
-  // World App UA usually contains "World App" or "MiniKit".
-  // To be safe but restrict strict desktop browsers, we check for absent standard desktop tokens or presence of mobile tokens if known.
-  // For now, let's enforce a basic check that it's not a standard headless script unless Key is present, 
-  // BUT user requested "Restrict access exclusively to the MiniApp environment".
-  const userAgent = req.headers.get('user-agent') || '';
-  // Simple check for now: verify it's not empty. 
-  // For strict "Mini App Only", we might filter known bad UAs, but without exact World App UA spec, strict filtering is risky.
-  // However, we CAN require the key + valid session + wallet match as the primary gate.
-
-  // 2. Access Key Check
   const providedKey = req.headers.get('x-admin-key');
   const requiredKey = Deno.env.get('ADMIN_ACCESS_KEY');
-  if (!requiredKey || providedKey !== requiredKey) {
-    throw new Error('Invalid or missing Admin Access Key');
+
+  if (!requiredKey) {
+    console.error('ADMIN_ACCESS_KEY is not set in environment');
+    throw new Error('Admin Access Key is not configured on server');
   }
 
-  // 3. User Session Check (Must be logged in even with key)
-  const userId = await requireUserId(req);
+  if (providedKey !== requiredKey) {
+    console.error('Key mismatch!', {
+      providedLength: providedKey?.length,
+      requiredLength: requiredKey?.length,
+      providedStart: providedKey?.substring(0, 2),
+      requiredStart: requiredKey?.substring(0, 2)
+    });
+    throw new Error('Invalid Admin Access Key');
+  }
 
-  // 4. DB Role & 5. Wallet Address Check
+  const userId = await requireUserId(req);
   const admin = getAdminClient();
-  const { data: profile } = await admin
+  const { data: profile, error: profileError } = await admin
     .from('profiles')
     .select('is_admin, wallet_address')
     .eq('id', userId)
-    .single();
+    .maybeSingle();
+
+  if (profileError) {
+    console.error('Error fetching admin profile:', profileError);
+    throw new Error(`Profile fetch failed: ${profileError.message}`);
+  }
+
+  if (!profile) {
+    throw new Error('User profile not found. Please log in again.');
+  }
 
   const allowedWallet = Deno.env.get('ADMIN_WALLET_ADDRESS');
-
-  // Wallet Check (if configured)
   if (allowedWallet) {
     const allowedWallets = allowedWallet.split(',').map(w => w.trim().toLowerCase());
-    if (!profile?.wallet_address || !allowedWallets.includes(profile.wallet_address.toLowerCase())) {
-      throw new Error('Wallet address does not match authorized admin wallet');
+    if (!profile.wallet_address || !allowedWallets.includes(profile.wallet_address.toLowerCase())) {
+      console.warn(`Admin wallet mismatch. Profile: ${profile.wallet_address}, Allowed: ${allowedWallet}`);
+      throw new Error('Your wallet address is not authorized for Game Master access');
     }
   }
 
-  // Auto-Promote if Key is valid (Bootstrap Admin)
-  if (profile && !profile.is_admin) {
-    console.log(`Auto-promoting user ${userId} to admin via Access Key`);
-    await admin.from('profiles').update({ is_admin: true }).eq('id', userId);
-  } else if (!profile?.is_admin) {
-    // If profile doesn't exist (should happen rarely if logged in) or update failed
-    throw new Error('User is not an admin in database');
+  if (!profile.is_admin) {
+    console.log(`Auto-promoting user ${userId} to admin via valid Access Key`);
+    const { error: updateError } = await admin
+      .from('profiles')
+      .update({ is_admin: true })
+      .eq('id', userId);
+
+    if (updateError) {
+      console.error('Failed to auto-promote admin:', updateError);
+      throw new Error('Failed to grant admin privileges. Check database RLS/permissions.');
+    }
   }
 }

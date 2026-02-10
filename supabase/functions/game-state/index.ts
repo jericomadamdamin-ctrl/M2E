@@ -14,11 +14,11 @@ Deno.serve(async (req) => {
     const { state, machines } = await processMining(userId, { config });
 
     const admin = getAdminClient();
-    const { data: profile } = await admin
+    const { data: profile, error: profileError } = await admin
       .from('profiles')
       .select('player_name, is_admin, is_human_verified, wallet_address, referral_code')
       .eq('id', userId)
-      .single();
+      .maybeSingle();
 
     // Count successful referrals
     const { count: referralCount } = await admin
@@ -32,7 +32,7 @@ Deno.serve(async (req) => {
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(1)
-      .single();
+      .maybeSingle();
 
     // Calculate slot info
     const slotConfig = (config as any).slots ?? { base_slots: 10, max_total_slots: 30 };
@@ -49,7 +49,13 @@ Deno.serve(async (req) => {
         last_cashout: lastCashoutRequest?.created_at
       },
       machines,
-      profile: profile ? { ...profile, referral_count: referralCount || 0 } : null
+      profile: profile ? { ...profile, referral_count: referralCount || 0 } : null,
+      debug: {
+        userId,
+        hasProfile: !!profile,
+        isAdmin: profile?.is_admin,
+        profileError: profileError?.message
+      }
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
