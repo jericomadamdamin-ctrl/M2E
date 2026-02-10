@@ -1,6 +1,7 @@
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Shield } from 'lucide-react';
+import { Shield, Loader2 } from 'lucide-react';
 import { MiniKit, VerificationLevel, type ISuccessResult } from '@worldcoin/minikit-js';
 import { supabase } from '@/integrations/supabase/client';
 import { getSession, getSessionToken } from '@/lib/session';
@@ -12,8 +13,10 @@ interface HumanGateProps {
 
 export const HumanGate = ({ onVerified }: HumanGateProps) => {
   const { toast } = useToast();
+  const [loading, setLoading] = useState(false);
 
   const handleVerify = async () => {
+    setLoading(true);
     try {
       const miniKit = ensureMiniKit();
       if (miniKit.ok === false) {
@@ -22,6 +25,7 @@ export const HumanGate = ({ onVerified }: HumanGateProps) => {
           description: getMiniKitErrorMessage(miniKit.reason),
           variant: 'destructive',
         });
+        setLoading(false);
         return;
       }
 
@@ -92,6 +96,8 @@ export const HumanGate = ({ onVerified }: HumanGateProps) => {
         description: err instanceof Error ? err.message : 'Unable to verify',
         variant: 'destructive',
       });
+    } finally {
+      if (loading) setLoading(false);
     }
   };
 
@@ -108,8 +114,16 @@ export const HumanGate = ({ onVerified }: HumanGateProps) => {
         <Button
           className="w-full glow-green"
           onClick={handleVerify}
+          disabled={loading}
         >
-          Verify with World ID
+          {loading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Verifying...
+            </>
+          ) : (
+            'Verify with World ID'
+          )}
         </Button>
       </div>
     </div>

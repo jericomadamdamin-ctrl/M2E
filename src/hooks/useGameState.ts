@@ -381,7 +381,7 @@ export const useGameState = () => {
         throw new Error('Payment cancelled');
       }
 
-      const result = await confirmMachinePurchase(init.reference);
+      const result = await confirmMachinePurchase(finalPayload);
 
       if (result.ok) {
         toast({

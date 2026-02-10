@@ -182,11 +182,13 @@ export const AdminTab = ({ config }: AdminTabProps) => {
 
     return (
         <div className="space-y-6 pb-20 animate-fade-in">
-            <div className="flex items-center justify-between">
-                <h2 className="font-pixel text-xl text-primary text-glow">Game Master Dashboard</h2>
-                <Button size="sm" variant="outline" onClick={loadStats} disabled={loading}>
-                    Refresh
-                </Button>
+            <div className="relative flex items-center justify-center mb-6">
+                <h2 className="font-pixel text-2xl text-primary text-glow text-center">Game Master Dashboard</h2>
+                <div className="absolute right-0">
+                    <Button size="sm" variant="outline" onClick={loadStats} disabled={loading}>
+                        Refresh
+                    </Button>
+                </div>
             </div>
 
             {/* Stats Overview */}

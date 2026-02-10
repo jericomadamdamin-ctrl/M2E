@@ -205,10 +205,10 @@ export async function initiateMachinePurchase(machineType: string) {
   };
 }
 
-export async function confirmMachinePurchase(reference: string) {
+export async function confirmMachinePurchase(payload: unknown) {
   const { data, error } = await supabase.functions.invoke('machine-purchase-confirm', {
     headers: authHeaders(),
-    body: { reference },
+    body: { payload }, // Wrapper property 'payload' as expected by backend
   });
   if (error) await handleFunctionError(error);
   // biome-ignore lint/suspicious/noExplicitAny: Machine type
