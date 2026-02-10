@@ -240,6 +240,12 @@ export const useGameState = () => {
             setPlayer((prev) => ({ ...prev, oilBalance: Math.max(0, prev.oilBalance - fillAmount) }));
             didOptimisticallyChangePlayer = true;
           }
+        } else if (typeof payload?.amount === 'number' && payload.amount > 0 && prevPlayer.oilBalance >= payload.amount && prevMachine) {
+          // Fallback: no config yet (tests / edge), still apply the requested amount optimistically
+          const fillAmount = payload.amount;
+          setMachines((prev) => prev.map((m) => (m.id === machineId ? { ...m, fuelOil: m.fuelOil + fillAmount } : m)));
+          setPlayer((prev) => ({ ...prev, oilBalance: Math.max(0, prev.oilBalance - fillAmount) }));
+          didOptimisticallyChangePlayer = true;
         }
       }
 

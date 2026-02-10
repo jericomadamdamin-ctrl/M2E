@@ -27,15 +27,27 @@ Deno.serve(async (req) => {
         let result;
 
         if (action === 'update' && (id || updates.key)) {
-            const pk = table === 'global_game_settings' ? 'key' : 'id';
-            const { data, error } = await admin
-                .from(table)
-                .update(updates)
-                .eq(pk, id || updates.key)
-                .select()
-                .single();
-            if (error) throw error;
-            result = data;
+            // Special case: player_flags uses user_id as PK; use upsert to create row if missing
+            if (table === 'player_flags') {
+                const userId = id || updates.key;
+                const { data, error } = await admin
+                    .from(table)
+                    .upsert({ user_id: userId, ...updates }, { onConflict: 'user_id' })
+                    .select()
+                    .single();
+                if (error) throw error;
+                result = data;
+            } else {
+                const pk = table === 'global_game_settings' ? 'key' : 'id';
+                const { data, error } = await admin
+                    .from(table)
+                    .update(updates)
+                    .eq(pk, id || updates.key)
+                    .select()
+                    .single();
+                if (error) throw error;
+                result = data;
+            }
         } else if (action === 'fetch') {
             const { data, error } = await admin
                 .from(table)

@@ -17,6 +17,7 @@ export const AdminFinancials = ({ stats, accessKey, onRefresh }: AdminFinancials
     const { toast } = useToast();
     const [pendingOil, setPendingOil] = useState<any[]>([]);
     const [pendingMachines, setPendingMachines] = useState<any[]>([]);
+    const [pendingSlots, setPendingSlots] = useState<any[]>([]);
     const [loadingPending, setLoadingPending] = useState(false);
 
     const loadPending = async () => {
@@ -25,6 +26,7 @@ export const AdminFinancials = ({ stats, accessKey, onRefresh }: AdminFinancials
             const data = await fetchPendingTransactions(accessKey);
             setPendingOil(data.oil);
             setPendingMachines(data.machines);
+            setPendingSlots(data.slots || []);
         } catch (err: any) {
             console.error("Failed to load pending transactions", err);
         } finally {
@@ -43,7 +45,7 @@ export const AdminFinancials = ({ stats, accessKey, onRefresh }: AdminFinancials
         loadPending();
     }, [accessKey]);
 
-    const handleVerify = async (type: 'oil' | 'machine', id: string) => {
+    const handleVerify = async (type: 'oil' | 'machine' | 'slot', id: string) => {
         if (!confirm(`Are you sure you want to MANUALLY CONFIRM this ${type} purchase? This will grant items immediately.`)) return;
         setProcessingId(id);
         try {
@@ -65,7 +67,7 @@ export const AdminFinancials = ({ stats, accessKey, onRefresh }: AdminFinancials
         }
     };
 
-    const handleReject = async (type: 'oil' | 'machine', id: string) => {
+    const handleReject = async (type: 'oil' | 'machine' | 'slot', id: string) => {
         if (!confirm(`Are you sure you want to REJECT this purchase? It will be marked as failed.`)) return;
         setProcessingId(id);
         try {
@@ -208,6 +210,32 @@ export const AdminFinancials = ({ stats, accessKey, onRefresh }: AdminFinancials
                         </div>
                     )}
                 </div>
+
+                {/* Pending Slot Purchases */}
+                <div className="space-y-3 pt-2">
+                    <div className="flex items-center gap-2 px-1">
+                        <Layers className="w-3 h-3 text-cyan-400" />
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Slot Expansions ({pendingSlots.length})</span>
+                    </div>
+                    {pendingSlots.length === 0 ? (
+                        <div className="text-center py-10 bg-white/5 rounded-2xl border border-dashed border-white/10 opacity-50">
+                            <span className="text-[10px] uppercase tracking-widest">No pending slot purchases</span>
+                        </div>
+                    ) : (
+                        <div className="grid gap-3">
+                            {pendingSlots.map((tx) => (
+                                <TransactionCard
+                                    key={tx.id}
+                                    tx={tx}
+                                    type="slot"
+                                    onVerify={handleVerify}
+                                    onReject={handleReject}
+                                    processing={processingId === tx.id}
+                                />
+                            ))}
+                        </div>
+                    )}
+                </div>
             </div>
 
             <div className="h-[1px] w-full bg-gradient-to-r from-transparent via-white/10 to-transparent my-8" />
@@ -313,9 +341,9 @@ export const AdminFinancials = ({ stats, accessKey, onRefresh }: AdminFinancials
 
 interface TransactionCardProps {
     tx: any;
-    type: 'oil' | 'machine';
-    onVerify: (type: 'oil' | 'machine', id: string) => void;
-    onReject: (type: 'oil' | 'machine', id: string) => void;
+    type: 'oil' | 'machine' | 'slot';
+    onVerify: (type: 'oil' | 'machine' | 'slot', id: string) => void;
+    onReject: (type: 'oil' | 'machine' | 'slot', id: string) => void;
     processing: boolean;
 }
 
@@ -326,13 +354,13 @@ const TransactionCard = ({ tx, type, onVerify, onReject, processing }: Transacti
                 <div className="min-w-0">
                     <div className="text-[9px] text-muted-foreground uppercase font-bold tracking-[0.2em] mb-1 opacity-50">Transaction</div>
                     <div className="flex items-center gap-2">
-                        {type === 'oil' ? (
-                            <span className="text-sm font-bold text-primary">{formatCompactNumber(tx.amount_oil)} OIL</span>
-                        ) : (
-                            <span className="text-sm font-bold text-primary uppercase">{tx.machine_type}</span>
-                        )}
+                        {type === 'oil' && <span className="text-sm font-bold text-primary">{formatCompactNumber(tx.amount_oil)} OIL</span>}
+                        {type === 'machine' && <span className="text-sm font-bold text-primary uppercase">{tx.machine_type}</span>}
+                        {type === 'slot' && <span className="text-sm font-bold text-primary">{tx.slots_purchased} slots</span>}
                         <span className="text-[10px] text-muted-foreground">/</span>
-                        <span className="text-sm font-bold text-white">{type === 'oil' ? tx.amount_token : tx.amount_wld} {type === 'oil' ? tx.token : 'WLD'}</span>
+                        <span className="text-sm font-bold text-white">
+                            {type === 'oil' ? tx.amount_token : tx.amount_wld} {type === 'oil' ? tx.token : 'WLD'}
+                        </span>
                     </div>
                 </div>
                 <div className="text-right shrink-0">

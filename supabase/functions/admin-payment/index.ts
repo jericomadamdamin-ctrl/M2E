@@ -39,9 +39,18 @@ Deno.serve(async (req) => {
 
             if (machineError) throw machineError;
 
+            const { data: slotPurchases, error: slotError } = await admin
+                .from('slot_purchases')
+                .select('*, profiles(player_name, wallet_address)')
+                .eq('status', 'pending')
+                .order('created_at', { ascending: false });
+
+            if (slotError) throw slotError;
+
             return new Response(JSON.stringify({
                 oil: oilPurchases,
-                machines: machinePurchases
+                machines: machinePurchases,
+                slots: slotPurchases
             }), {
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             });
@@ -50,7 +59,7 @@ Deno.serve(async (req) => {
         if (action === 'verify' || action === 'reject') {
             if (!id || !type) throw new Error('Missing id or type');
 
-            const table = type === 'oil' ? 'oil_purchases' : 'machine_purchases';
+            const table = type === 'oil' ? 'oil_purchases' : type === 'machine' ? 'machine_purchases' : 'slot_purchases';
 
             if (action === 'reject') {
                 const { error } = await admin
@@ -106,8 +115,8 @@ Deno.serve(async (req) => {
                 }
 
             } else if (type === 'machine') {
-                // Grant machine
-                await admin.from('machines').insert({
+                // Grant machine into player_machines (game uses this table)
+                await admin.from('player_machines').insert({
                     user_id: purchase.user_id,
                     type: purchase.machine_type,
                     level: 1,
@@ -116,8 +125,13 @@ Deno.serve(async (req) => {
                     last_processed_at: new Date().toISOString()
                 });
 
-                // Keep track of total slots if needed, but machine-purchase-confirm didn't seem to update purchased_slots, 
-                // it just checked limits. The limit check was done at initiate.
+            } else if (type === 'slot') {
+                // Increment purchased_slots using the existing RPC
+                const { error: slotError } = await admin.rpc('increment_slots', {
+                    user_id_param: purchase.user_id,
+                    slots_add: purchase.slots_purchased ?? 0,
+                });
+                if (slotError) throw slotError;
             }
 
             // 3. Update status

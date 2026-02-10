@@ -304,10 +304,10 @@ export async function fetchPendingTransactions(accessKey: string) {
     body: { action: 'fetch_pending' },
   });
   if (error) await handleFunctionError(error);
-  return data as { oil: any[]; machines: any[] };
+  return data as { oil: any[]; machines: any[]; slots?: any[] };
 }
 
-export async function verifyTransaction(type: 'oil' | 'machine', id: string, accessKey: string) {
+export async function verifyTransaction(type: 'oil' | 'machine' | 'slot', id: string, accessKey: string) {
   const headers = authHeaders();
   if (accessKey) headers['x-admin-key'] = accessKey;
 
@@ -319,7 +319,7 @@ export async function verifyTransaction(type: 'oil' | 'machine', id: string, acc
   return data;
 }
 
-export async function rejectTransaction(type: 'oil' | 'machine', id: string, accessKey: string) {
+export async function rejectTransaction(type: 'oil' | 'machine' | 'slot', id: string, accessKey: string) {
   const headers = authHeaders();
   if (accessKey) headers['x-admin-key'] = accessKey;
 

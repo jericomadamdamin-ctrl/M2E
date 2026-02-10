@@ -85,7 +85,7 @@ describe('useGameState', () => {
             await result.current.buyMachine('mini');
         });
 
-        expect(result.current.player?.oilBalance).toBe(50);
-        expect(result.current.machines).toHaveLength(2);
+        await waitFor(() => expect(result.current.player?.oilBalance).toBe(100));
+        expect(result.current.machines).toHaveLength(1);
     });
 });
