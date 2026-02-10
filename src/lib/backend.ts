@@ -184,7 +184,7 @@ export async function initiateSlotPurchase() {
 export async function confirmSlotPurchase(payload: unknown) {
   const { data, error } = await supabase.functions.invoke('slot-purchase-confirm', {
     headers: authHeaders(),
-    body: payload,
+    body: { payload },
   });
   if (error) await handleFunctionError(error);
   return data as { ok: boolean; slots_added: number };
