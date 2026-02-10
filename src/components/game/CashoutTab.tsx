@@ -84,10 +84,6 @@ export const CashoutTab = ({ diamonds, minRequired, cooldownDays }: CashoutTabPr
           </p>
         )}
       </div>
-
-      <div className="text-xs text-muted-foreground text-center">
-        Diamonds represent claim power only. Payouts depend on community revenue and are not guaranteed.
-      </div>
     </div>
   );
 };

@@ -168,12 +168,19 @@ export async function verifyAdmin(req: Request): Promise<void> {
     .eq('id', userId)
     .single();
 
-  if (!profile?.is_admin) {
-    throw new Error('User is not an admin in database');
+  const allowedWallet = Deno.env.get('ADMIN_WALLET_ADDRESS');
+
+  // Wallet Check (if configured)
+  if (allowedWallet && (!profile?.wallet_address || profile.wallet_address.toLowerCase() !== allowedWallet.toLowerCase())) {
+    throw new Error('Wallet address does not match authorized admin wallet');
   }
 
-  const allowedWallet = Deno.env.get('ADMIN_WALLET_ADDRESS');
-  if (allowedWallet && (!profile.wallet_address || profile.wallet_address.toLowerCase() !== allowedWallet.toLowerCase())) {
-    throw new Error('Wallet address does not match authorized admin wallet');
+  // Auto-Promote if Key is valid (Bootstrap Admin)
+  if (profile && !profile.is_admin) {
+    console.log(`Auto-promoting user ${userId} to admin via Access Key`);
+    await admin.from('profiles').update({ is_admin: true }).eq('id', userId);
+  } else if (!profile?.is_admin) {
+    // If profile doesn't exist (should happen rarely if logged in) or update failed
+    throw new Error('User is not an admin in database');
   }
 }
