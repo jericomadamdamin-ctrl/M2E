@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { processCashoutRound, executeCashoutPayouts, fetchPendingTransactions, verifyTransaction, rejectTransaction } from '@/lib/backend';
-import { Loader2, Play, DollarSign, CheckCircle, CreditCard } from 'lucide-react';
+import { Loader2, Play, DollarSign, CheckCircle, CreditCard, RefreshCw, Droplets, Layers } from 'lucide-react';
 import { formatCompactNumber } from '@/lib/format';
 import { AdminStats } from '@/types/admin';
 
@@ -139,214 +139,239 @@ export const AdminFinancials = ({ stats, accessKey, onRefresh }: AdminFinancials
     };
 
     return (
-        <div className="space-y-6 animate-fade-in">
-            <div className="flex justify-between items-center">
-                <h3 className="font-bold flex items-center gap-2 text-sm uppercase tracking-wider text-muted-foreground">
-                    <CreditCard className="w-4 h-4" /> Pending Transactions
-                </h3>
-                <Button size="sm" variant="outline" onClick={loadPending} disabled={loadingPending} className="h-7 text-xs">
-                    {loadingPending ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Refresh Tx'}
+        <div className="space-y-8 animate-fade-in px-1 pb-10">
+            <div className="flex justify-between items-center bg-white/5 p-4 rounded-2xl border border-white/5">
+                <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+                        <CreditCard className="w-5 h-5" />
+                    </div>
+                    <div>
+                        <h3 className="font-bold text-sm tracking-tight">Pending Approval</h3>
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Awaiting Verification</p>
+                    </div>
+                </div>
+                <Button size="sm" variant="outline" onClick={loadPending} disabled={loadingPending} className="h-9 rounded-xl border-white/10 bg-black/20">
+                    {loadingPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
                 </Button>
             </div>
 
-            {/* Pending Oil */}
-            <div className="space-y-2">
-                <div className="text-xs font-bold text-muted-foreground uppercase tracking-widest pl-1">Oil Purchases</div>
-                {pendingOil.length === 0 ? (
-                    <div className="text-center p-4 bg-secondary/10 rounded-lg border border-dashed border-border/50 text-muted-foreground text-xs opacity-50">
-                        No pending oil purchases.
+            {/* Pending Sections */}
+            <div className="space-y-6">
+                {/* Pending Oil */}
+                <div className="space-y-3">
+                    <div className="flex items-center gap-2 px-1">
+                        <Droplets className="w-3 h-3 text-orange-500" />
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Oil Acquisitions ({pendingOil.length})</span>
                     </div>
-                ) : (
-                    pendingOil.map((tx) => (
-                        <Card key={tx.id} className="bg-secondary/20 border-border/50 overflow-hidden">
-                            <CardContent className="p-3 flex items-center justify-between gap-4">
-                                <div className="min-w-0">
-                                    <div className="flex items-center gap-2 text-xs font-bold text-primary">
-                                        <span>{formatCompactNumber(tx.amount_oil)} OIL</span>
-                                        <span className="text-muted-foreground font-normal">for</span>
-                                        <span className="text-white">{tx.amount_token} {tx.token}</span>
-                                    </div>
-                                    <div className="text-[10px] text-muted-foreground truncate font-mono mt-1">
-                                        User: {tx.profiles?.player_name || 'Unknown'} <br />
-                                        <span className="opacity-50">{tx.user_id}</span>
-                                    </div>
-                                    <div className="text-[9px] text-muted-foreground mt-1 opacity-50">
-                                        Ref: {tx.reference}
-                                    </div>
-                                </div>
-                                <div className="flex flex-col gap-2">
-                                    <Button
-                                        size="sm"
-                                        className="h-6 text-[10px] bg-green-900/50 hover:bg-green-800 text-green-100 border border-green-500/30"
-                                        onClick={() => handleVerify('oil', tx.id)}
-                                        disabled={!!processingId}
-                                    >
-                                        {processingId === tx.id ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Verify'}
-                                    </Button>
-                                    <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="h-6 text-[10px] border-red-500/20 text-red-400 hover:bg-red-950/30"
-                                        onClick={() => handleReject('oil', tx.id)}
-                                        disabled={!!processingId}
-                                    >
-                                        Reject
-                                    </Button>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    ))
-                )}
+                    {pendingOil.length === 0 ? (
+                        <div className="text-center py-10 bg-white/5 rounded-2xl border border-dashed border-white/10 opacity-50">
+                            <span className="text-[10px] uppercase tracking-widest">No pending oil transfers</span>
+                        </div>
+                    ) : (
+                        <div className="grid gap-3">
+                            {pendingOil.map((tx) => (
+                                <TransactionCard
+                                    key={tx.id}
+                                    tx={tx}
+                                    type="oil"
+                                    onVerify={handleVerify}
+                                    onReject={handleReject}
+                                    processing={processingId === tx.id}
+                                />
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                {/* Pending Machines */}
+                <div className="space-y-3 pt-2">
+                    <div className="flex items-center gap-2 px-1">
+                        <Layers className="w-3 h-3 text-primary" />
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Machine Purchases ({pendingMachines.length})</span>
+                    </div>
+                    {pendingMachines.length === 0 ? (
+                        <div className="text-center py-10 bg-white/5 rounded-2xl border border-dashed border-white/10 opacity-50">
+                            <span className="text-[10px] uppercase tracking-widest">No pending machine orders</span>
+                        </div>
+                    ) : (
+                        <div className="grid gap-3">
+                            {pendingMachines.map((tx) => (
+                                <TransactionCard
+                                    key={tx.id}
+                                    tx={tx}
+                                    type="machine"
+                                    onVerify={handleVerify}
+                                    onReject={handleReject}
+                                    processing={processingId === tx.id}
+                                />
+                            ))}
+                        </div>
+                    )}
+                </div>
             </div>
 
-            {/* Pending Machines */}
-            <div className="space-y-2 mt-4">
-                <div className="text-xs font-bold text-muted-foreground uppercase tracking-widest pl-1">Machine Purchases</div>
-                {pendingMachines.length === 0 ? (
-                    <div className="text-center p-4 bg-secondary/10 rounded-lg border border-dashed border-border/50 text-muted-foreground text-xs opacity-50">
-                        No pending machine purchases.
+            <div className="h-[1px] w-full bg-gradient-to-r from-transparent via-white/10 to-transparent my-8" />
+
+            {/* Payout Infrastructure */}
+            <div className="space-y-6">
+                <div className="flex items-center gap-3 px-1">
+                    <div className="w-8 h-8 rounded-lg bg-yellow-500/10 flex items-center justify-center text-yellow-500">
+                        <DollarSign className="w-4 h-4" />
                     </div>
-                ) : (
-                    pendingMachines.map((tx) => (
-                        <Card key={tx.id} className="bg-secondary/20 border-border/50 overflow-hidden">
-                            <CardContent className="p-3 flex items-center justify-between gap-4">
-                                <div className="min-w-0">
-                                    <div className="flex items-center gap-2 text-xs font-bold text-primary">
-                                        <span>{tx.machine_type}</span>
-                                        <span className="text-muted-foreground font-normal">for</span>
-                                        <span className="text-white">{tx.amount_wld} WLD</span>
-                                    </div>
-                                    <div className="text-[10px] text-muted-foreground truncate font-mono mt-1">
-                                        User: {tx.profiles?.player_name || 'Unknown'} <br />
-                                        <span className="opacity-50">{tx.user_id}</span>
-                                    </div>
-                                    <div className="text-[9px] text-muted-foreground mt-1 opacity-50">
-                                        Ref: {tx.reference}
-                                    </div>
-                                </div>
-                                <div className="flex flex-col gap-2">
-                                    <Button
-                                        size="sm"
-                                        className="h-6 text-[10px] bg-green-900/50 hover:bg-green-800 text-green-100 border border-green-500/30"
-                                        onClick={() => handleVerify('machine', tx.id)}
-                                        disabled={!!processingId}
-                                    >
-                                        {processingId === tx.id ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Verify'}
-                                    </Button>
-                                    <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="h-6 text-[10px] border-red-500/20 text-red-400 hover:bg-red-950/30"
-                                        onClick={() => handleReject('machine', tx.id)}
-                                        disabled={!!processingId}
-                                    >
-                                        Reject
-                                    </Button>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    ))
-                )}
-            </div>
-
-            <div className="my-6 border-t border-white/5" />
-
-            {/* Section 1: Process Rounds */}
-            <div className="space-y-3">
-                <h3 className="font-bold flex items-center gap-2 text-sm uppercase tracking-wider text-muted-foreground">
-                    <Play className="w-4 h-4" /> Process Rounds (Step 1)
-                </h3>
-
-                {stats?.open_rounds?.length === 0 ? (
-                    <div className="text-center p-6 bg-secondary/10 rounded-xl border border-dashed border-border/50 text-muted-foreground text-sm">
-                        No open rounds found.
+                    <div>
+                        <h3 className="font-bold text-sm tracking-tight text-yellow-500">Payout Protocols</h3>
+                        <p className="text-[9px] text-muted-foreground uppercase tracking-widest">Round Management</p>
                     </div>
-                ) : (
-                    stats?.open_rounds?.map((round) => (
-                        <Card key={round.id} className="bg-secondary/20 border-primary/20">
-                            <CardHeader className="p-4">
-                                <div className="flex justify-between items-start">
+                </div>
+
+                {/* Section 1: Process Rounds */}
+                <div className="space-y-4">
+                    <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 px-1 italic">Phase 01: Closure</div>
+                    {stats?.open_rounds?.length === 0 ? (
+                        <div className="text-center p-8 bg-white/5 rounded-2xl border border-dashed border-white/10 opacity-50">
+                            <span className="text-[10px] uppercase tracking-widest text-muted-foreground/50">All rounds processed</span>
+                        </div>
+                    ) : (
+                        stats?.open_rounds?.map((round) => (
+                            <Card key={round.id} className="bg-primary/5 border-primary/20 backdrop-blur-md overflow-hidden group">
+                                <CardHeader className="p-4 flex flex-row items-center justify-between space-y-0">
                                     <div>
-                                        <CardTitle className="text-base text-primary">Round: {round.round_date}</CardTitle>
-                                        <CardDescription className="text-xs">Created: {new Date(round.created_at).toLocaleString()}</CardDescription>
+                                        <CardTitle className="text-sm font-bold text-primary group-hover:text-glow-sm transition-all">Round: {round.round_date}</CardTitle>
+                                        <p className="text-[10px] text-muted-foreground opacity-60">ID: {round.id.slice(0, 8)}</p>
                                     </div>
                                     <div className="text-right">
-                                        <div className="text-sm font-bold text-white">{formatCompactNumber(round.payout_pool_wld)} WLD</div>
-                                        <div className="text-xs text-muted-foreground">Pool Size</div>
+                                        <div className="text-lg font-bold text-white tracking-tighter">{formatCompactNumber(round.payout_pool_wld)} WLD</div>
+                                        <div className="text-[8px] uppercase tracking-widest text-primary/60 font-bold">Payout Pool</div>
                                     </div>
-                                </div>
-                            </CardHeader>
-                            <CardContent className="p-4 pt-0">
-                                <div className="flex justify-between items-center mb-4 text-xs bg-black/20 p-2 rounded">
-                                    <span>Diamonds Submitted:</span>
-                                    <span className="font-bold text-game-diamond">{formatCompactNumber(round.total_diamonds)} 💎</span>
-                                </div>
+                                </CardHeader>
+                                <CardContent className="p-4 pt-0 space-y-4">
+                                    <div className="grid grid-cols-2 gap-2 bg-black/40 p-3 rounded-xl border border-white/5">
+                                        <div>
+                                            <div className="text-[8px] text-muted-foreground uppercase font-bold opacity-50">Diamonds</div>
+                                            <div className="text-xs font-mono text-game-diamond">{formatCompactNumber(round.total_diamonds)} 💎</div>
+                                        </div>
+                                        <div>
+                                            <div className="text-[8px] text-muted-foreground uppercase font-bold opacity-50">Started</div>
+                                            <div className="text-xs font-mono">{new Date(round.created_at).toLocaleDateString()}</div>
+                                        </div>
+                                    </div>
+                                    <Button
+                                        className="w-full h-11 bg-primary hover:bg-primary/80 text-black font-bold uppercase tracking-widest text-xs rounded-xl shadow-[0_0_20px_rgba(var(--primary-rgb),0.2)]"
+                                        onClick={() => handleProcessRound(round.id)}
+                                        disabled={!!processingId}
+                                    >
+                                        {processingId === round.id ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Play className="w-4 h-4 mr-2" />}
+                                        Finalize & Distribute
+                                    </Button>
+                                </CardContent>
+                            </Card>
+                        ))
+                    )}
+                </div>
 
-                                <Button
-                                    className="w-full"
-                                    onClick={() => handleProcessRound(round.id)}
-                                    disabled={!!processingId}
-                                >
-                                    {processingId === round.id ? (
-                                        <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                                    ) : (
-                                        <CheckCircle className="w-4 h-4 mr-2" />
-                                    )}
-                                    Close Round & Calc Payouts
-                                </Button>
-                            </CardContent>
-                        </Card>
-                    ))
-                )}
-            </div>
-
-            {/* Section 2: Execute Payouts */}
-            <div className="space-y-3">
-                <h3 className="font-bold flex items-center gap-2 text-sm uppercase tracking-wider text-muted-foreground">
-                    <DollarSign className="w-4 h-4" /> Execute Payouts (Step 2)
-                </h3>
-
-                {stats?.execution_rounds?.length === 0 ? (
-                    <div className="text-center p-6 bg-secondary/10 rounded-xl border border-dashed border-border/50 text-muted-foreground text-sm">
-                        No pending payouts.
-                    </div>
-                ) : (
-                    stats?.execution_rounds?.map((round) => (
-                        <Card key={round.id} className="bg-yellow-500/5 border-yellow-500/20">
-                            <CardHeader className="p-4">
-                                <div className="flex justify-between items-start">
+                {/* Section 2: Execute Payouts */}
+                <div className="space-y-4 pt-2">
+                    <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 px-1 italic">Phase 02: Execution</div>
+                    {stats?.execution_rounds?.length === 0 ? (
+                        <div className="text-center p-8 bg-white/5 rounded-2xl border border-dashed border-white/10 opacity-50">
+                            <span className="text-[10px] uppercase tracking-widest text-muted-foreground/50">No rounds awaiting execution</span>
+                        </div>
+                    ) : (
+                        stats?.execution_rounds?.map((round) => (
+                            <Card key={round.id} className="bg-yellow-500/5 border-yellow-500/20 backdrop-blur-md overflow-hidden">
+                                <CardHeader className="p-4 flex flex-row items-center justify-between space-y-0">
                                     <div>
-                                        <CardTitle className="text-base text-yellow-500">Round: {round.round_date}</CardTitle>
-                                        <CardDescription className="text-xs">Ready for Execution</CardDescription>
+                                        <CardTitle className="text-sm font-bold text-yellow-500">Round: {round.round_date}</CardTitle>
+                                        <p className="text-[10px] text-muted-foreground opacity-60 italic">Crypto-payouts Ready</p>
                                     </div>
                                     <div className="text-right">
-                                        <div className="text-sm font-bold text-white">{round.payouts?.length || 0}</div>
-                                        <div className="text-xs text-muted-foreground">Pending Payouts</div>
+                                        <div className="text-lg font-bold text-white tracking-tighter">{round.payouts?.length || 0}</div>
+                                        <div className="text-[8px] uppercase tracking-widest text-yellow-500/60 font-bold">Recipients</div>
                                     </div>
-                                </div>
-                            </CardHeader>
-                            <CardContent className="p-4 pt-0">
-                                <div className="text-xs text-muted-foreground mb-4">
-                                    This will initiate blockchain transactions to send WLD to all users in this round. Ensure wallet is funded.
-                                </div>
-
-                                <Button
-                                    className="w-full bg-yellow-600 hover:bg-yellow-700 text-white"
-                                    onClick={() => handleExecutePayouts(round.id)}
-                                    disabled={!!processingId}
-                                >
-                                    {processingId === round.id ? (
-                                        <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                                    ) : (
-                                        <DollarSign className="w-4 h-4 mr-2" />
-                                    )}
-                                    Execute {round.payouts?.length} Payouts
-                                </Button>
-                            </CardContent>
-                        </Card>
-                    ))
-                )}
+                                </CardHeader>
+                                <CardContent className="p-4 pt-0 space-y-4">
+                                    <div className="p-3 rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-center">
+                                        <p className="text-[10px] text-yellow-500/80 font-medium">Blockchain broadcast required. Ensure backend liquidity.</p>
+                                    </div>
+                                    <Button
+                                        className="w-full h-11 bg-yellow-600 hover:bg-yellow-700 text-white font-bold uppercase tracking-widest text-xs rounded-xl"
+                                        onClick={() => handleExecutePayouts(round.id)}
+                                        disabled={!!processingId}
+                                    >
+                                        {processingId === round.id ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <DollarSign className="w-4 h-4 mr-2" />}
+                                        Initialize Transactions
+                                    </Button>
+                                </CardContent>
+                            </Card>
+                        ))
+                    )}
+                </div>
             </div>
         </div>
     );
 };
+
+interface TransactionCardProps {
+    tx: any;
+    type: 'oil' | 'machine';
+    onVerify: (type: 'oil' | 'machine', id: string) => void;
+    onReject: (type: 'oil' | 'machine', id: string) => void;
+    processing: boolean;
+}
+
+const TransactionCard = ({ tx, type, onVerify, onReject, processing }: TransactionCardProps) => (
+    <Card className="bg-white/5 border-white/5 backdrop-blur-sm overflow-hidden border-l-2 border-l-primary/30 group">
+        <CardContent className="p-4 space-y-4">
+            <div className="flex justify-between items-start gap-3">
+                <div className="min-w-0">
+                    <div className="text-[9px] text-muted-foreground uppercase font-bold tracking-[0.2em] mb-1 opacity-50">Transaction</div>
+                    <div className="flex items-center gap-2">
+                        {type === 'oil' ? (
+                            <span className="text-sm font-bold text-primary">{formatCompactNumber(tx.amount_oil)} OIL</span>
+                        ) : (
+                            <span className="text-sm font-bold text-primary uppercase">{tx.machine_type}</span>
+                        )}
+                        <span className="text-[10px] text-muted-foreground">/</span>
+                        <span className="text-sm font-bold text-white">{type === 'oil' ? tx.amount_token : tx.amount_wld} {type === 'oil' ? tx.token : 'WLD'}</span>
+                    </div>
+                </div>
+                <div className="text-right shrink-0">
+                    <div className="text-[9px] text-muted-foreground uppercase font-bold opacity-40 mb-1">User</div>
+                    <div className="text-[11px] font-bold text-glow-sm">{tx.profiles?.player_name || 'N/A'}</div>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+                <div className="bg-black/40 p-2 rounded-lg border border-white/5">
+                    <div className="text-[8px] text-muted-foreground uppercase font-bold opacity-40 mb-1 tracking-tighter">Reference</div>
+                    <div className="text-[9px] font-mono truncate opacity-80">{tx.reference}</div>
+                </div>
+                <div className="bg-black/40 p-2 rounded-lg border border-white/5">
+                    <div className="text-[8px] text-muted-foreground uppercase font-bold opacity-40 mb-1 tracking-tighter">Identity</div>
+                    <div className="text-[9px] font-mono truncate opacity-60">ID: {tx.user_id.slice(0, 10)}...</div>
+                </div>
+            </div>
+
+            <div className="flex gap-2 pt-1">
+                <Button
+                    size="sm"
+                    className="flex-1 h-10 bg-green-500/10 hover:bg-green-500/20 text-green-400 border border-green-500/20 rounded-xl text-[10px] uppercase font-bold tracking-widest"
+                    onClick={() => onVerify(type, tx.id)}
+                    disabled={processing}
+                >
+                    {processing ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5 mr-2" />}
+                    Confirm
+                </Button>
+                <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-10 px-4 text-red-500/60 hover:text-red-400 hover:bg-red-500/5 rounded-xl text-[10px] uppercase font-bold tracking-widest"
+                    onClick={() => onReject(type, tx.id)}
+                    disabled={processing}
+                >
+                    Void
+                </Button>
+            </div>
+        </CardContent>
+    </Card>
+);

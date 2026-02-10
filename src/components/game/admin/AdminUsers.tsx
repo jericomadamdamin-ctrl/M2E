@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { fetchUsers, fetchTable } from '@/lib/backend';
-import { Loader2, Search, RefreshCw, User } from 'lucide-react';
+import { Loader2, Search, RefreshCw, User, Droplets, Gem } from 'lucide-react';
 import { formatCompactNumber } from '@/lib/format';
 
 interface UserData {
@@ -72,90 +72,109 @@ export const AdminUsers = ({ accessKey }: { accessKey?: string }) => {
     );
 
     return (
-        <div className="space-y-4 animate-fade-in">
-            <div className="flex justify-between items-center gap-4">
-                <div className="relative flex-1 max-w-sm">
-                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+        <div className="space-y-6 animate-fade-in px-1">
+            <div className="flex items-center gap-3">
+                <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                     <Input
-                        placeholder="Search users..."
-                        className="pl-9 h-9 bg-secondary/20 border-border/50"
+                        placeholder="Search identity or wallet..."
+                        className="pl-9 h-11 bg-white/5 border-white/10 rounded-xl text-xs focus:ring-primary/20"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                     />
                 </div>
-                <Button size="sm" variant="outline" onClick={loadUsers} disabled={loading} className="h-9">
+                <Button
+                    size="icon"
+                    variant="outline"
+                    onClick={loadUsers}
+                    disabled={loading}
+                    className="h-11 w-11 rounded-xl border-white/10 bg-white/5"
+                >
                     {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
                 </Button>
             </div>
 
-            <Card className="bg-secondary/10 border-border/50">
-                <CardContent className="p-0">
-                    <div className="rounded-md border border-border/50 overflow-hidden">
-                        <Table>
-                            <TableHeader className="bg-secondary/20">
-                                <TableRow>
-                                    <TableHead className="hidden sm:table-cell w-[100px]">Joined</TableHead>
-                                    <TableHead className="px-2 sm:px-4">User</TableHead>
-                                    <TableHead className="hidden sm:table-cell">Wallet</TableHead>
-                                    <TableHead className="text-right px-2 sm:px-4">Oil</TableHead>
-                                    <TableHead className="text-right px-2 sm:px-4">Diamonds</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {loading && users.length === 0 ? (
-                                    <TableRow>
-                                        <TableCell colSpan={5} className="h-24 text-center">
-                                            <Loader2 className="w-6 h-6 animate-spin mx-auto text-muted-foreground" />
-                                        </TableCell>
-                                    </TableRow>
-                                ) : filteredUsers.length === 0 ? (
-                                    <TableRow>
-                                        <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
-                                            No users found.
-                                        </TableCell>
-                                    </TableRow>
-                                ) : (
-                                    filteredUsers.slice(0, 50).map((user) => (
-                                        <TableRow key={user.id} className="hover:bg-secondary/20 border-border/50">
-                                            <TableCell className="hidden sm:table-cell text-xs text-muted-foreground font-mono">
-                                                {new Date(user.created_at).toLocaleDateString()}
-                                            </TableCell>
-                                            <TableCell className="px-2 sm:px-4">
-                                                <div className="flex items-center gap-2">
-                                                    <div className="w-6 h-6 sm:w-8 sm:h-8 shrink-0 rounded-full bg-primary/20 flex items-center justify-center text-[10px] sm:text-xs font-bold text-primary">
-                                                        {(user.player_name || '?').charAt(0).toUpperCase()}
-                                                    </div>
-                                                    <div className="flex flex-col min-w-0">
-                                                        <span className="text-xs sm:text-sm font-medium truncate">{user.player_name}</span>
-                                                        <span className="text-[9px] sm:text-[10px] text-muted-foreground font-mono opacity-50 truncate">
-                                                            <span className="sm:hidden">{new Date(user.created_at).toLocaleDateString()} • </span>
-                                                            {user.id.slice(0, 8)}...
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            </TableCell>
-                                            <TableCell className="hidden sm:table-cell font-mono text-xs text-muted-foreground">
-                                                {user.wallet_address ? (
-                                                    <span title={user.wallet_address}>{user.wallet_address.slice(0, 6)}...{user.wallet_address.slice(-4)}</span>
-                                                ) : '-'}
-                                            </TableCell>
-                                            <TableCell className="text-right px-2 sm:px-4 font-mono text-[11px] sm:text-sm">
+            <div className="space-y-4">
+                {loading && users.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-20 space-y-4 opacity-50">
+                        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                        <span className="text-[10px] uppercase tracking-widest">Accessing records...</span>
+                    </div>
+                ) : filteredUsers.length === 0 ? (
+                    <div className="text-center py-20 bg-white/5 rounded-2xl border border-dashed border-white/10">
+                        <User className="w-8 h-8 mx-auto mb-2 text-muted-foreground opacity-20" />
+                        <p className="text-xs text-muted-foreground font-medium">No identities localized.</p>
+                    </div>
+                ) : (
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        {filteredUsers.slice(0, 50).map((user) => (
+                            <Card key={user.id} className="bg-white/5 border-white/5 backdrop-blur-md hover:border-primary/30 transition-all duration-300 group">
+                                <CardContent className="p-4">
+                                    <div className="flex items-start justify-between gap-4">
+                                        <div className="flex items-center gap-3 min-w-0">
+                                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary/20 to-cyan-500/20 flex items-center justify-center text-primary border border-primary/20 shrink-0">
+                                                <span className="font-pixel text-xs">{(user.player_name || '?').charAt(0).toUpperCase()}</span>
+                                            </div>
+                                            <div className="flex flex-col min-w-0">
+                                                <span className="text-sm font-bold truncate text-glow-sm">{user.player_name}</span>
+                                                <span className="text-[9px] text-muted-foreground font-mono opacity-60 truncate">
+                                                    ID: {user.id.slice(0, 12)}...
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div className="text-right shrink-0">
+                                            <div className="text-[9px] text-muted-foreground uppercase opacity-40 font-bold mb-1">Joined</div>
+                                            <div className="text-[10px] font-mono">{new Date(user.created_at).toLocaleDateString()}</div>
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-4 grid grid-cols-2 gap-2">
+                                        <div className="p-2 rounded-lg bg-black/40 border border-white/5">
+                                            <div className="text-[8px] text-muted-foreground uppercase font-bold tracking-tighter opacity-50 mb-1">Oil Reservoir</div>
+                                            <div className="text-xs font-mono text-orange-500 flex items-center gap-1">
+                                                <Droplets className="w-2.5 h-2.5" />
                                                 {formatCompactNumber(user.oil_balance)}
-                                            </TableCell>
-                                            <TableCell className="text-right px-2 sm:px-4 font-bold text-game-diamond text-[11px] sm:text-sm whitespace-nowrap">
-                                                {formatCompactNumber(user.diamond_balance)} 💎
-                                            </TableCell>
-                                        </TableRow>
-                                    ))
-                                )}
-                            </TableBody>
-                        </Table>
+                                            </div>
+                                        </div>
+                                        <div className="p-2 rounded-lg bg-black/40 border border-white/5">
+                                            <div className="text-[8px] text-muted-foreground uppercase font-bold tracking-tighter opacity-50 mb-1">Diamonds</div>
+                                            <div className="text-xs font-mono text-game-diamond flex items-center gap-1">
+                                                <Gem className="w-2.5 h-2.5" />
+                                                {formatCompactNumber(user.diamond_balance)}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-3 flex items-center justify-between border-t border-white/5 pt-3">
+                                        <div className="flex items-center gap-1.5 min-w-0">
+                                            <div className="w-1.5 h-1.5 rounded-full bg-primary/40 animate-pulse" />
+                                            <span className="text-[9px] text-muted-foreground font-mono truncate max-w-[120px]">
+                                                {user.wallet_address ? `${user.wallet_address.slice(0, 6)}...${user.wallet_address.slice(-4)}` : 'WALLET_NOT_LINKED'}
+                                            </span>
+                                        </div>
+                                        <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            className="h-6 px-2 text-[9px] uppercase tracking-widest text-primary hover:bg-primary/10"
+                                        >
+                                            Inspect
+                                        </Button>
+                                    </div>
+                                </CardContent>
+                                {/* Bottom accent line */}
+                                <div className="absolute bottom-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-primary/20 to-transparent scale-x-0 group-hover:scale-x-100 transition-transform duration-500" />
+                            </Card>
+                        ))}
                     </div>
-                    <div className="p-2 text-xs text-center text-muted-foreground bg-secondary/20 border-t border-border/50">
-                        Showing {filteredUsers.slice(0, 50).length} of {filteredUsers.length} users
-                    </div>
-                </CardContent>
-            </Card>
+                )}
+            </div>
+
+            <div className="py-8 flex flex-col items-center gap-2 opacity-30">
+                <div className="h-[1px] w-12 bg-white/20" />
+                <span className="text-[8px] uppercase tracking-[0.3em]">
+                    Localized {filteredUsers.slice(0, 50).length} OF {filteredUsers.length} Records
+                </span>
+            </div>
         </div>
     );
 };
