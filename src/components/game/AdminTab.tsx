@@ -13,6 +13,7 @@ import { AdminDashboard } from './admin/AdminDashboard';
 import { AdminGameConfig } from './admin/AdminGameConfig';
 import { AdminUsers } from './admin/AdminUsers';
 import { AdminFinancials } from './admin/AdminFinancials';
+import { AdminCashout } from './admin/AdminCashout';
 
 interface AdminTabProps {
     config: GameConfig | null;
@@ -167,8 +168,12 @@ export const AdminTab = ({ config }: AdminTabProps) => {
                         <User className="w-4 h-4" />
                         <span className="text-[9px] uppercase font-bold tracking-tight">Players</span>
                     </TabsTrigger>
-                    <TabsTrigger value="financials" className="flex-1 flex flex-col gap-1 py-3 rounded-lg data-[state=active]:bg-primary/10 data-[state=active]:text-primary transition-all">
+                    <TabsTrigger value="cashout" className="flex-1 flex flex-col gap-1 py-3 rounded-lg data-[state=active]:bg-primary/10 data-[state=active]:text-primary transition-all">
                         <CreditCard className="w-4 h-4" />
+                        <span className="text-[9px] uppercase font-bold tracking-tight">Cashout</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="financials" className="flex-1 flex flex-col gap-1 py-3 rounded-lg data-[state=active]:bg-primary/10 data-[state=active]:text-primary transition-all">
+                        <Activity className="w-4 h-4" />
                         <span className="text-[9px] uppercase font-bold tracking-tight">Vault</span>
                     </TabsTrigger>
                     <TabsTrigger value="config" className="flex-1 flex flex-col gap-1 py-3 rounded-lg data-[state=active]:bg-primary/10 data-[state=active]:text-primary transition-all">
@@ -179,11 +184,15 @@ export const AdminTab = ({ config }: AdminTabProps) => {
 
                 <div className="mt-2 min-h-[50vh]">
                     <TabsContent value="dashboard">
-                        <AdminDashboard stats={stats} />
+                        <AdminDashboard stats={stats} accessKey={accessKey} />
                     </TabsContent>
 
                     <TabsContent value="users">
                         <AdminUsers accessKey={accessKey} />
+                    </TabsContent>
+
+                    <TabsContent value="cashout">
+                        <AdminCashout accessKey={accessKey} />
                     </TabsContent>
 
                     <TabsContent value="financials">

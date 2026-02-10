@@ -1,17 +1,57 @@
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AdminStats } from '@/types/admin';
-import { Users, Droplets, Gem, Layers, Clock, TrendingUp } from 'lucide-react';
+import { Users, Droplets, Gem, Layers, Clock, TrendingUp, DollarSign, Calendar } from 'lucide-react';
 import { formatCompactNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { fetchTable } from '@/lib/backend';
 
 interface AdminDashboardProps {
     stats: AdminStats | null;
+    accessKey?: string;
 }
 
-export const AdminDashboard = ({ stats }: AdminDashboardProps) => {
+export const AdminDashboard = ({ stats, accessKey }: AdminDashboardProps) => {
+    const [dailyEarnings, setDailyEarnings] = useState(0);
+    const [todayStr, setTodayStr] = useState('');
+
+    useEffect(() => {
+        const calculateDaily = async () => {
+            if (!accessKey) return;
+            try {
+                const now = new Date();
+                const startOfDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString();
+                setTodayStr(new Date(startOfDay).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }));
+
+                const [oil, machines, slots] = await Promise.all([
+                    fetchTable('oil_purchases', accessKey),
+                    fetchTable('machine_purchases', accessKey),
+                    fetchTable('slot_purchases', accessKey)
+                ]);
+
+                const filterToday = (rows: any[]) => (rows || [])
+                    .filter(r => r.status === 'confirmed' && r.created_at >= startOfDay)
+                    .reduce((sum, r) => sum + Number(r.amount_wld || 0), 0);
+
+                setDailyEarnings(filterToday(oil) + filterToday(machines) + filterToday(slots));
+            } catch (err) {
+                console.error("Failed to load daily analytics", err);
+            }
+        };
+        calculateDaily();
+    }, [accessKey]);
+
     return (
         <div className="space-y-6 animate-fade-in px-1">
             <div className="grid grid-cols-2 gap-4">
+                <StatCard
+                    title="Daily Revenue (UTC)"
+                    value={`${dailyEarnings.toFixed(2)} WLD`}
+                    subtitle={todayStr}
+                    icon={<DollarSign className="w-4 h-4" />}
+                    color="primary"
+                    className="col-span-2 border-primary/40 bg-primary/10"
+                />
                 <StatCard
                     title="Total Players"
                     value={formatCompactNumber(stats?.total_users || 0)}
@@ -34,9 +74,9 @@ export const AdminDashboard = ({ stats }: AdminDashboardProps) => {
             </div>
 
             <div className="space-y-3 pt-2">
-                <div className="flex items-center gap-2 px-1">
-                    <TrendingUp className="w-3 h-3 text-muted-foreground" />
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Network Activity</span>
+                <div className="flex items-center gap-2 px-1 text-muted-foreground">
+                    <TrendingUp className="w-3 h-3" />
+                    <span className="text-[10px] font-bold uppercase tracking-widest">Network Activity</span>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                     <Card className="bg-white/5 border-white/5 backdrop-blur-sm">
@@ -66,12 +106,13 @@ export const AdminDashboard = ({ stats }: AdminDashboardProps) => {
 interface StatCardProps {
     title: string;
     value: string;
+    subtitle?: string;
     icon: React.ReactNode;
     color: 'primary' | 'orange' | 'cyan';
     className?: string;
 }
 
-const StatCard = ({ title, value, icon, color, className }: StatCardProps) => {
+const StatCard = ({ title, value, subtitle, icon, color, className }: StatCardProps) => {
     const colorClasses = {
         primary: "text-primary border-primary/20 bg-primary/5 shadow-[0_0_20px_rgba(var(--primary-rgb),0.05)]",
         orange: "text-orange-500 border-orange-500/20 bg-orange-500/5 shadow-[0_0_20px_rgba(249,115,22,0.05)]",
@@ -79,7 +120,7 @@ const StatCard = ({ title, value, icon, color, className }: StatCardProps) => {
     };
 
     return (
-        <Card className={cn("overflow-hidden border group backdrop-blur-md", colorClasses[color], className)}>
+        <Card className={cn("overflow-hidden border group backdrop-blur-md relative", colorClasses[color], className)}>
             <div className="absolute top-0 right-0 p-3 opacity-20 group-hover:opacity-40 transition-opacity">
                 {icon}
             </div>
@@ -87,7 +128,8 @@ const StatCard = ({ title, value, icon, color, className }: StatCardProps) => {
                 <CardTitle className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/80">{title}</CardTitle>
             </CardHeader>
             <CardContent className="p-4 pt-1">
-                <div className="text-3xl font-bold tracking-tight">{value}</div>
+                <div className="text-2xl font-bold tracking-tight">{value}</div>
+                {subtitle && <div className="text-[9px] font-mono opacity-40 mt-1 flex items-center gap-1"><Calendar className="w-2.5 h-2.5" /> {subtitle}</div>}
             </CardContent>
             {/* Gloss effect */}
             <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent pointer-events-none" />
