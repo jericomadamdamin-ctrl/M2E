@@ -27,6 +27,12 @@ interface ProfileTabProps {
 }
 
 export const ProfileTab = ({ player, machines, config, isAdmin, playerName, referralCode, referralCount = 0 }: ProfileTabProps) => {
+  if (!player || !config) {
+    return <div className="p-8 text-center"><Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" /></div>;
+  }
+
+  const totalMinerals = Object.values(player.minerals).reduce((a, b) => a + b, 0);
+  const { toast } = useToast();
   // ... (existing hooks)
 
   const [claimingDaily, setClaimingDaily] = useState(false);
