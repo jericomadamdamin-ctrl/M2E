@@ -44,7 +44,7 @@ export const AdminCashout = ({ accessKey }: { accessKey: string }) => {
 
     return (
         <div className="space-y-4 animate-fade-in px-1">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Card className="bg-primary/5 border-primary/20 backdrop-blur-md">
                     <CardContent className="p-4 py-3">
                         <div className="text-[10px] text-muted-foreground uppercase mb-1">Total in Scope</div>
@@ -91,29 +91,29 @@ export const AdminCashout = ({ accessKey }: { accessKey: string }) => {
                 ) : (
                     filtered.map((req) => (
                         <Card key={req.id} className="bg-white/5 border-white/5 backdrop-blur-md overflow-hidden relative group">
-                            <CardContent className="p-4">
-                                <div className="flex justify-between items-start mb-4">
-                                    <div className="space-y-1">
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-[10px] font-mono opacity-40">#{req.id.slice(0, 8)}</span>
+                            <CardContent className="p-4 space-y-3">
+                                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
+                                    <div className="space-y-1 min-w-0">
+                                        <div className="flex items-center flex-wrap gap-2">
+                                            <span className="text-[10px] font-mono opacity-40 break-all">#{req.id.slice(0, 8)}</span>
                                             <StatusBadge status={req.status} />
                                         </div>
-                                        <div className="text-xs font-mono opacity-60">USR: {req.user_id.slice(0, 12)}...</div>
+                                        <div className="text-[10px] font-mono opacity-60 break-all">USR: {req.user_id}</div>
                                     </div>
-                                    <div className="text-right">
+                                    <div className="text-right shrink-0">
                                         <div className="text-lg font-bold text-game-diamond flex items-center justify-end gap-1">
                                             {req.diamonds_submitted} <Gem className="w-3.5 h-3.5" />
                                         </div>
-                                        <div className="text-[9px] opacity-30">{new Date(req.requested_at).toLocaleString()}</div>
+                                        <div className="text-[9px] opacity-50">{new Date(req.requested_at).toLocaleString()}</div>
                                     </div>
                                 </div>
 
                                 {req.status === 'pending' && (
-                                    <div className="mt-4 grid grid-cols-2 gap-3 pt-4 border-t border-white/5">
+                                    <div className="pt-3 border-t border-white/5 flex flex-col sm:grid sm:grid-cols-2 gap-3">
                                         <Button
                                             size="sm"
                                             onClick={() => handleAction(req.id, 'approved')}
-                                            className="bg-primary/20 text-primary hover:bg-primary/40 text-[9px] uppercase tracking-widest font-bold h-9 rounded-xl border border-primary/20"
+                                            className="bg-primary/20 text-primary hover:bg-primary/40 text-[10px] uppercase tracking-widest font-bold h-10 rounded-xl border border-primary/20 w-full"
                                         >
                                             <CheckCircle className="w-3.5 h-3.5 mr-2" /> Approve
                                         </Button>
@@ -121,7 +121,7 @@ export const AdminCashout = ({ accessKey }: { accessKey: string }) => {
                                             size="sm"
                                             variant="ghost"
                                             onClick={() => handleAction(req.id, 'rejected')}
-                                            className="text-red-500 hover:bg-red-500/10 text-[9px] uppercase tracking-widest font-bold h-9 rounded-xl border border-red-500/10"
+                                            className="text-red-500 hover:bg-red-500/10 text-[10px] uppercase tracking-widest font-bold h-10 rounded-xl border border-red-500/10 w-full"
                                         >
                                             <XCircle className="w-3.5 h-3.5 mr-2" /> Reject
                                         </Button>
@@ -132,7 +132,7 @@ export const AdminCashout = ({ accessKey }: { accessKey: string }) => {
                                     <Button
                                         size="sm"
                                         onClick={() => handleAction(req.id, 'paid')}
-                                        className="w-full bg-green-500/20 text-green-500 hover:bg-green-500/40 text-[9px] uppercase tracking-widest font-bold h-9 rounded-xl border border-green-500/20 mt-4"
+                                        className="w-full bg-green-500/20 text-green-500 hover:bg-green-500/40 text-[10px] uppercase tracking-widest font-bold h-10 rounded-xl border border-green-500/20 mt-2"
                                     >
                                         <Wallet className="w-3.5 h-3.5 mr-2" /> Mark as Paid
                                     </Button>

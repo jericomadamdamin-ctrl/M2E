@@ -4,7 +4,6 @@ import { AdminStats } from '@/types/admin';
 import { Users, Droplets, Gem, Layers, Clock, TrendingUp, DollarSign, Calendar } from 'lucide-react';
 import { formatCompactNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import { fetchTable } from '@/lib/backend';
 
 interface AdminDashboardProps {
     stats: AdminStats | null;
@@ -16,30 +15,13 @@ export const AdminDashboard = ({ stats, accessKey }: AdminDashboardProps) => {
     const [todayStr, setTodayStr] = useState('');
 
     useEffect(() => {
-        const calculateDaily = async () => {
-            if (!accessKey) return;
-            try {
-                const now = new Date();
-                const startOfDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString();
-                setTodayStr(new Date(startOfDay).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }));
-
-                const [oil, machines, slots] = await Promise.all([
-                    fetchTable('oil_purchases', accessKey),
-                    fetchTable('machine_purchases', accessKey),
-                    fetchTable('slot_purchases', accessKey)
-                ]);
-
-                const filterToday = (rows: any[]) => (rows || [])
-                    .filter(r => r.status === 'confirmed' && r.created_at >= startOfDay)
-                    .reduce((sum, r) => sum + Number(r.amount_wld || 0), 0);
-
-                setDailyEarnings(filterToday(oil) + filterToday(machines) + filterToday(slots));
-            } catch (err) {
-                console.error("Failed to load daily analytics", err);
-            }
-        };
-        calculateDaily();
-    }, [accessKey]);
+        const now = new Date();
+        const startOfDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString();
+        setTodayStr(new Date(startOfDay).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }));
+        if (stats?.daily_revenue_wld !== undefined) {
+            setDailyEarnings(Number(stats.daily_revenue_wld || 0));
+        }
+    }, [stats]);
 
     return (
         <div className="space-y-6 animate-fade-in px-1">

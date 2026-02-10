@@ -1,6 +1,7 @@
 
 import { corsHeaders, handleOptions } from '../_shared/cors.ts';
-import { getAdminClient, verifyAdmin } from '../_shared/supabase.ts';
+import { getAdminClient, verifyAdmin, requireUserId } from '../_shared/supabase.ts';
+import { checkRateLimit } from '../_shared/security.ts';
 
 Deno.serve(async (req) => {
     const preflight = handleOptions(req);
@@ -14,7 +15,13 @@ Deno.serve(async (req) => {
             });
         }
 
+        const userId = await requireUserId(req);
         await verifyAdmin(req);
+
+        const rate = await checkRateLimit(userId, 'admin_stats', 60, 1);
+        if (!rate.allowed) {
+            throw new Error('Admin rate limit exceeded. Try again in a minute.');
+        }
 
         const admin = getAdminClient();
 
@@ -67,10 +74,31 @@ Deno.serve(async (req) => {
         // Global Stats
         const { count: totalUsers } = await admin.from('profiles').select('*', { count: 'exact', head: true });
 
-        // Calculate totals (fetching all states for now - scalable solution would be RPC or materialized view)
-        const { data: allState } = await admin.from('player_state').select('oil_balance, diamond_balance');
-        const totalOil = allState?.reduce((acc: number, curr: any) => acc + (Number(curr.oil_balance) || 0), 0) || 0;
-        const totalDiamonds = allState?.reduce((acc: number, curr: any) => acc + (Number(curr.diamond_balance) || 0), 0) || 0;
+        // Aggregates: totals and daily revenue (UTC)
+        const { data: totalsRow } = await admin
+            .from('player_state')
+            .select('sum(oil_balance) as total_oil, sum(diamond_balance) as total_diamonds')
+            .single();
+        const totalOil = Number(totalsRow?.total_oil || 0);
+        const totalDiamonds = Number(totalsRow?.total_diamonds || 0);
+
+        const now = new Date();
+        const startUtc = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString();
+
+        const sumConfirmed = async (table: string, field: string) => {
+            const { data } = await admin
+                .from(table)
+                .select(`sum(${field})`)
+                .eq('status', 'confirmed')
+                .gte('created_at', startUtc)
+                .single();
+            return Number((data as any)?.[`sum`] ?? 0);
+        };
+
+        const dailyOil = await sumConfirmed('oil_purchases', 'amount_wld');
+        const dailyMachines = await sumConfirmed('machine_purchases', 'amount_wld');
+        const dailySlots = await sumConfirmed('slot_purchases', 'amount_wld');
+        const dailyRevenueWld = dailyOil + dailyMachines + dailySlots;
 
         return new Response(JSON.stringify({
             open_rounds: openRounds || [],
@@ -78,6 +106,7 @@ Deno.serve(async (req) => {
             total_users: totalUsers || 0,
             total_oil: totalOil,
             total_diamonds: totalDiamonds,
+            daily_revenue_wld: dailyRevenueWld,
         }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });

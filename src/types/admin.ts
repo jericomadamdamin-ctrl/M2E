@@ -15,4 +15,5 @@ export interface AdminStats {
     total_users?: number;
     total_oil?: number;
     total_diamonds?: number;
+    daily_revenue_wld?: number;
 }

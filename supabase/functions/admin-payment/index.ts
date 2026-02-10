@@ -1,7 +1,8 @@
 
 import { corsHeaders, handleOptions } from '../_shared/cors.ts';
-import { getAdminClient, verifyAdmin } from '../_shared/supabase.ts';
+import { getAdminClient, verifyAdmin, requireUserId } from '../_shared/supabase.ts';
 import { getGameConfig } from '../_shared/mining.ts';
+import { logSecurityEvent, extractClientInfo, checkRateLimit } from '../_shared/security.ts';
 
 Deno.serve(async (req) => {
     const preflight = handleOptions(req);
@@ -15,7 +16,13 @@ Deno.serve(async (req) => {
             });
         }
 
+        const userId = await requireUserId(req);
         await verifyAdmin(req);
+
+        const rate = await checkRateLimit(userId, 'admin_payment', 20, 1);
+        if (!rate.allowed) {
+            throw new Error('Admin rate limit exceeded. Try again in a minute.');
+        }
 
         const { action, type, id } = await req.json();
         const admin = getAdminClient();
@@ -67,6 +74,14 @@ Deno.serve(async (req) => {
                     .update({ status: 'failed', metadata: { reason: 'Admin rejected' } })
                     .eq('id', id);
                 if (error) throw error;
+                const clientInfo = extractClientInfo(req);
+                logSecurityEvent({
+                    event_type: 'admin_action',
+                    severity: 'info',
+                    action: 'admin_reject',
+                    details: { type, id },
+                    ...clientInfo,
+                }).catch(() => {});
                 return new Response(JSON.stringify({ ok: true }), {
                     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
                 });
@@ -115,6 +130,14 @@ Deno.serve(async (req) => {
                 }
 
             } else if (type === 'machine') {
+                // Underpayment guard: ensure amount_wld meets expected (±1%)
+                if (purchase.amount_wld && tx?.input_token?.amount) {
+                    const txAmount = parseFloat(tx.input_token.amount);
+                    const expected = Number(purchase.amount_wld);
+                    if (txAmount < expected * 0.99) {
+                        throw new Error('Transaction amount mismatch for machine purchase');
+                    }
+                }
                 // Grant machine into player_machines (game uses this table)
                 await admin.from('player_machines').insert({
                     user_id: purchase.user_id,
@@ -126,6 +149,13 @@ Deno.serve(async (req) => {
                 });
 
             } else if (type === 'slot') {
+                if (purchase.amount_wld && tx?.input_token?.amount) {
+                    const txAmount = parseFloat(tx.input_token.amount);
+                    const expected = Number(purchase.amount_wld);
+                    if (txAmount < expected * 0.99) {
+                        throw new Error('Transaction amount mismatch for slot purchase');
+                    }
+                }
                 // Increment purchased_slots using the existing RPC
                 const { error: slotError } = await admin.rpc('increment_slots', {
                     user_id_param: purchase.user_id,
@@ -141,6 +171,16 @@ Deno.serve(async (req) => {
                 .eq('id', id);
 
             if (updateError) throw updateError;
+
+            const clientInfo = extractClientInfo(req);
+            logSecurityEvent({
+                event_type: 'admin_action',
+                user_id: purchase.user_id,
+                severity: 'info',
+                action: 'admin_verify',
+                details: { type, id },
+                ...clientInfo,
+            }).catch(() => {});
 
             return new Response(JSON.stringify({ ok: true }), {
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' },

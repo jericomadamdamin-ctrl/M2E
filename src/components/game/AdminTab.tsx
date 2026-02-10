@@ -30,6 +30,21 @@ export const AdminTab = ({ config }: AdminTabProps) => {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const { toast } = useToast();
 
+    // Persist access key locally (session scope) so refresh doesn't drop admin access
+    useEffect(() => {
+        const saved = typeof window !== 'undefined' ? window.sessionStorage.getItem('admin_access_key') : null;
+        if (saved) {
+            setAccessKey(saved);
+            setIsAuthenticated(false); // still require a fresh fetch
+        }
+    }, []);
+
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            if (accessKey) window.sessionStorage.setItem('admin_access_key', accessKey);
+        }
+    }, [accessKey]);
+
     const handleLogin = async () => {
         if (!accessKey) return;
         setLoading(true);
