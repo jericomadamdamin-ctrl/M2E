@@ -19,7 +19,7 @@ Deno.serve(async (req) => {
 
         const { table, action, id, updates } = await req.json();
 
-        if (!table || !['machine_tiers', 'mineral_configs', 'global_game_settings'].includes(table)) {
+        if (!table || !['machine_tiers', 'mineral_configs', 'global_game_settings', 'profiles', 'player_state'].includes(table)) {
             throw new Error('Invalid or unauthorized table');
         }
 

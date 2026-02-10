@@ -291,3 +291,67 @@ export async function updateGlobalSetting(key: string, value: number, accessKey?
   if (error) await handleFunctionError(error);
   return data;
 }
+
+export async function fetchPendingTransactions(accessKey: string) {
+  const headers = authHeaders();
+  if (accessKey) headers['x-admin-key'] = accessKey;
+
+  const { data, error } = await supabase.functions.invoke('admin-payment', {
+    headers,
+    body: { action: 'fetch_pending' },
+  });
+  if (error) await handleFunctionError(error);
+  return data as { oil: any[]; machines: any[] };
+}
+
+export async function verifyTransaction(type: 'oil' | 'machine', id: string, accessKey: string) {
+  const headers = authHeaders();
+  if (accessKey) headers['x-admin-key'] = accessKey;
+
+  const { data, error } = await supabase.functions.invoke('admin-payment', {
+    headers,
+    body: { action: 'verify', type, id },
+  });
+  if (error) await handleFunctionError(error);
+  return data;
+}
+
+export async function rejectTransaction(type: 'oil' | 'machine', id: string, accessKey: string) {
+  const headers = authHeaders();
+  if (accessKey) headers['x-admin-key'] = accessKey;
+
+  const { data, error } = await supabase.functions.invoke('admin-payment', {
+    headers,
+    body: { action: 'reject', type, id },
+  });
+  if (error) await handleFunctionError(error);
+  return data;
+}
+
+export async function fetchUsers(accessKey: string) {
+  const headers = authHeaders();
+  if (accessKey) headers['x-admin-key'] = accessKey;
+
+  // We can reuse admin-db fetch for profiles, but let's join with player_state if possible, 
+  // or just fetch profiles and we can fetch state separately or in a loop.
+  // For now simple fetch of profiles is enough, we can add a specific join function later if needed.
+  // But wait, admin-db fetch is simple select *.
+  // Let's use it.
+
+  // Actually, let's just use admin-db to fetch profiles.
+  const profiles = await fetchTable('profiles', accessKey);
+  return profiles;
+}
+
+export async function fetchPlayerState(userId: string, accessKey: string) {
+  const headers = authHeaders();
+  if (accessKey) headers['x-admin-key'] = accessKey;
+
+  // We can't use generic fetchTable for single row easily without modification.
+  // Let's modify admin-db to allow fetching by ID?
+  // Actually, let's just fetch all player_state for now (not efficient but works for MVP) or add filtering to admin-db.
+  // Given the constraints and existing tools, let's blindly fetch all states for now or just rely on what we have.
+  // BETTER: The AdminUsers component can just fetch all 'player_state' and 'profiles' and join them client side for now, 
+  // assuming user count is low. 
+  return fetchTable('player_state', accessKey);
+}

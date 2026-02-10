@@ -65,9 +65,20 @@ Deno.serve(async (req) => {
             payouts: payoutsByRound[r.id]
         }));
 
+        // Global Stats
+        const { count: totalUsers } = await admin.from('profiles').select('*', { count: 'exact', head: true });
+
+        // Calculate totals (fetching all states for now - scalable solution would be RPC or materialized view)
+        const { data: allState } = await admin.from('player_state').select('oil_balance, diamond_balance');
+        const totalOil = allState?.reduce((acc: number, curr: any) => acc + (Number(curr.oil_balance) || 0), 0) || 0;
+        const totalDiamonds = allState?.reduce((acc: number, curr: any) => acc + (Number(curr.diamond_balance) || 0), 0) || 0;
+
         return new Response(JSON.stringify({
             open_rounds: openRounds || [],
             execution_rounds: executionRounds,
+            total_users: totalUsers || 0,
+            total_oil: totalOil,
+            total_diamonds: totalDiamonds,
         }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
