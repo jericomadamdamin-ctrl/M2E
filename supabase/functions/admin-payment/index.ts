@@ -68,6 +68,16 @@ Deno.serve(async (req) => {
 
             const table = type === 'oil' ? 'oil_purchases' : type === 'machine' ? 'machine_purchases' : 'slot_purchases';
 
+            // Load purchase once for both paths
+            const { data: purchase, error: fetchError } = await admin
+                .from(table)
+                .select('*')
+                .eq('id', id)
+                .single();
+
+            if (fetchError || !purchase) throw new Error('Purchase not found');
+            if (purchase.status !== 'pending') throw new Error('Purchase is not pending');
+
             if (action === 'reject') {
                 const { error } = await admin
                     .from(table)
@@ -79,7 +89,7 @@ Deno.serve(async (req) => {
                     event_type: 'admin_action',
                     severity: 'info',
                     action: 'admin_reject',
-                    details: { type, id },
+                    details: { type, id, user_id: purchase.user_id },
                     ...clientInfo,
                 }).catch(() => {});
                 return new Response(JSON.stringify({ ok: true }), {
@@ -89,15 +99,6 @@ Deno.serve(async (req) => {
 
             // Verify Logic
             // 1. Mark purchase as confirmed
-            const { data: purchase, error: fetchError } = await admin
-                .from(table)
-                .select('*')
-                .eq('id', id)
-                .single();
-
-            if (fetchError || !purchase) throw new Error('Purchase not found');
-            if (purchase.status !== 'pending') throw new Error('Purchase is not pending');
-
             // 2. Grant rewards
             if (type === 'oil') {
                 const { data: state } = await admin
