@@ -96,7 +96,10 @@ Deno.serve(async (req) => {
       throw new Error('Transaction failed');
     }
 
-    if (tx?.transaction_status && tx.transaction_status !== 'mined') {
+    const status = tx?.transaction_status;
+    const minedStatuses = ['mined', 'completed', 'confirmed', 'success'];
+
+    if (status && !minedStatuses.includes(status)) {
       return new Response(JSON.stringify({ ok: true, status: tx.transaction_status }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
