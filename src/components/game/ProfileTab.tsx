@@ -26,6 +26,67 @@ interface ProfileTabProps {
   referralCount?: number;
 }
 
+const ClaimButton = ({ lastClaim, onClaim, loading }: { lastClaim?: string, onClaim: () => void, loading: boolean }) => {
+  const [timeLeft, setTimeLeft] = useState<string>('');
+  const [canClaim, setCanClaim] = useState(false);
+
+  useEffect(() => {
+    const updateTimer = () => {
+      if (!lastClaim) {
+        setCanClaim(true);
+        setTimeLeft('');
+        return;
+      }
+
+      const lastClaimTime = new Date(lastClaim).getTime();
+      const now = Date.now();
+      const nextClaimTime = lastClaimTime + (24 * 60 * 60 * 1000); // 24 hours
+      const diff = nextClaimTime - now;
+
+      if (diff <= 0) {
+        setCanClaim(true);
+        setTimeLeft('');
+      } else {
+        setCanClaim(false);
+        const hours = Math.floor(diff / (1000 * 60 * 60));
+        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+        setTimeLeft(`${hours}h ${minutes}m ${seconds}s`);
+      }
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [lastClaim]);
+
+  if (loading) {
+    return (
+      <Button disabled size="sm" className="h-8 text-xs bg-accent/20 border border-accent/50">
+        <Loader2 className="w-3 h-3 animate-spin" />
+      </Button>
+    );
+  }
+
+  if (!canClaim) {
+    return (
+      <Button disabled size="sm" className="h-8 text-[10px] bg-secondary/50 text-muted-foreground border border-white/5 font-mono">
+        {timeLeft || 'Wait...'}
+      </Button>
+    );
+  }
+
+  return (
+    <Button
+      size="sm"
+      onClick={onClaim}
+      className="h-8 text-xs glow-green animate-pulse font-bold"
+    >
+      Claim
+    </Button>
+  );
+};
+
 export const ProfileTab = ({ player, machines, config, isAdmin, playerName, referralCode, referralCount = 0 }: ProfileTabProps) => {
   if (!player || !config) {
     return <div className="p-8 text-center"><Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" /></div>;
@@ -36,11 +97,6 @@ export const ProfileTab = ({ player, machines, config, isAdmin, playerName, refe
   // ... (existing hooks)
 
   const [claimingDaily, setClaimingDaily] = useState(false);
-  const [lastClaimTime, setLastClaimTime] = useState<number | null>(null); // To track simple cooldown purely frontend for now or fetch from backend if we add it to profile
-  // Since we didn't add last_daily_claim to GameStateResponse profile yet, we will rely on local state or just "Try Claim" interaction for now 
-  // OR we can infer availability if we fail? 
-  // Better: We added it to DB but not explicitly to `GameStateResponse` type in `start_machine` etc.
-  // Let's assume the user can try to claim.
 
   const handleDailyClaim = async () => {
     setClaimingDaily(true);
@@ -51,13 +107,8 @@ export const ProfileTab = ({ player, machines, config, isAdmin, playerName, refe
         description: `You received ${config?.global_game_settings?.daily_oil_reward ?? 5} Oil.`,
         className: "glow-green border-primary"
       });
-      setLastClaimTime(Date.now());
       // Re-trigger refresh? state is returned so implicit update via react-query mutation if we used it, 
       // but here we might need to rely on parent refresh or the fact that `oilBalance` updates from prop if parent fetches.
-      // Actually `gameAction` returns new state. 
-      // We should ideally call a prop `onStateUpdate` but `ProfileTab` doesn't have it. 
-      // It relies on `player` prop.
-      // We can force a window reload or better, use the `refresh` function from context if passed.
       // For now, the toast confirms it, and next poll updates balance.
     } catch (err: any) {
       toast({
@@ -100,14 +151,12 @@ export const ProfileTab = ({ player, machines, config, isAdmin, playerName, refe
               </div>
             </div>
           </div>
-          <Button
-            size="sm"
-            onClick={handleDailyClaim}
-            disabled={claimingDaily}
-            className="h-8 text-xs bg-accent/20 text-accent hover:bg-accent/30 border border-accent/50"
-          >
-            {claimingDaily ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Claim'}
-          </Button>
+
+          <ClaimButton
+            lastClaim={player.lastDailyClaim}
+            onClaim={handleDailyClaim}
+            loading={claimingDaily}
+          />
         </div>
       </div>
 

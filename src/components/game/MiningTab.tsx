@@ -347,12 +347,55 @@ export const MiningTab = ({
             <AlertDialogTitle>Upgrade Machine</AlertDialogTitle>
             <AlertDialogDescription>
               Upgrade this machine to Level {activeMachineForUpgrade ? activeMachineForUpgrade.level + 1 : ''}?
-              <br />
-              Cost: <span className="text-primary font-bold">{formatCompactNumber(upgradeCost)} OIL</span>
-              <br />
-              <span className="text-xs text-muted-foreground mt-2 block">
-                Upgrading increases mining speed, tank capacity, but also oil burn rate.
-              </span>
+              <div className="bg-secondary/20 rounded-lg p-3 my-3 space-y-2 text-xs">
+                {activeMachineForUpgrade && config && (() => {
+                  const m = activeMachineForUpgrade;
+                  const def = config.machines[m.type];
+                  const nextLvl = m.level + 1;
+
+                  const currSpeed = getMultiplier(def.speed_actions_per_hour, m.level, config.progression.level_speed_multiplier);
+                  const nextSpeed = getMultiplier(def.speed_actions_per_hour, nextLvl, config.progression.level_speed_multiplier);
+
+                  const currBurn = getMultiplier(def.oil_burn_per_hour, m.level, config.progression.level_oil_burn_multiplier);
+                  const nextBurn = getMultiplier(def.oil_burn_per_hour, nextLvl, config.progression.level_oil_burn_multiplier);
+
+                  const currCap = getMultiplier(def.tank_capacity, m.level, config.progression.level_capacity_multiplier);
+                  const nextCap = getMultiplier(def.tank_capacity, nextLvl, config.progression.level_capacity_multiplier);
+
+                  return (
+                    <>
+                      <div className="flex justify-between items-center">
+                        <span className="text-muted-foreground">Mining Speed:</span>
+                        <div className="flex items-center gap-2">
+                          <span>{currSpeed.toFixed(1)}/hr</span>
+                          <ArrowUpCircle className="w-3 h-3 text-primary animate-bounce-x" />
+                          <span className="text-primary font-bold">{nextSpeed.toFixed(1)}/hr</span>
+                        </div>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-muted-foreground">Tank Capacity:</span>
+                        <div className="flex items-center gap-2">
+                          <span>{currCap.toFixed(0)}</span>
+                          <ArrowUpCircle className="w-3 h-3 text-primary" />
+                          <span className="text-primary font-bold">{nextCap.toFixed(0)}</span>
+                        </div>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-muted-foreground">Oil Burn:</span>
+                        <div className="flex items-center gap-2">
+                          <span>{currBurn.toFixed(1)}/hr</span>
+                          <ArrowUpCircle className="w-3 h-3 text-accent" />
+                          <span className="text-accent font-bold">{nextBurn.toFixed(1)}/hr</span>
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+              <div className="flex justify-between items-center border-t border-white/10 pt-2">
+                <span className="text-muted-foreground">Upgrade Cost:</span>
+                <span className="text-primary font-bold text-sm">{formatCompactNumber(upgradeCost)} OIL</span>
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

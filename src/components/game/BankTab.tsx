@@ -10,6 +10,7 @@ interface BankTabProps {
     config: GameConfig;
     defaultOil?: number;
     onPurchaseComplete?: (newBalance?: number) => void;
+    lastCashout?: string;
 }
 
 export const BankTab = ({
@@ -17,7 +18,8 @@ export const BankTab = ({
     diamondBalance,
     config,
     defaultOil,
-    onPurchaseComplete
+    onPurchaseComplete,
+    lastCashout
 }: BankTabProps) => {
     return (
         <div className="space-y-4 pb-4">
@@ -51,6 +53,7 @@ export const BankTab = ({
                         diamonds={diamondBalance}
                         minRequired={config.cashout.minimum_diamonds_required}
                         cooldownDays={config.cashout.cooldown_days}
+                        lastCashout={lastCashout}
                     />
                 </TabsContent>
             </Tabs>

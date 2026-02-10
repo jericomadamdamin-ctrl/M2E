@@ -18,6 +18,8 @@ export interface PlayerState {
   purchasedSlots?: number;
   maxSlots?: number;
   totalConvertedOil?: number;
+  lastDailyClaim?: string;
+  lastCashout?: string;
 }
 
 export interface GameConfig {
@@ -98,6 +100,8 @@ export interface GameStateResponse {
     minerals: Record<MineralType, number>;
     purchased_slots?: number;
     max_slots?: number;
+    last_daily_claim?: string;
+    last_cashout?: string;
   };
   machines: Array<{
     id: string;

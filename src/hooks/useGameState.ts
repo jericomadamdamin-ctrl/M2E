@@ -32,6 +32,8 @@ const mapState = (response: GameStateResponse) => {
     minerals: { ...defaultMinerals, ...(response.state.minerals || {}) },
     purchasedSlots: Number(response.state.purchased_slots || 0),
     maxSlots: Number(response.state.max_slots || 10),
+    lastDailyClaim: response.state.last_daily_claim,
+    lastCashout: response.state.last_cashout,
   };
 
   const machines: Machine[] = response.machines.map((m) => ({

@@ -26,6 +26,14 @@ Deno.serve(async (req) => {
       .select('*', { count: 'exact', head: true })
       .eq('referrer_id', userId);
 
+    const { data: lastCashoutRequest } = await admin
+      .from('cashout_requests')
+      .select('created_at')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
     // Calculate slot info
     const slotConfig = (config as any).slots ?? { base_slots: 10, max_total_slots: 30 };
     const purchasedSlots = Number((state as any).purchased_slots ?? 0);
@@ -34,7 +42,12 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({
       ok: true,
       config,
-      state: { ...state, purchased_slots: purchasedSlots, max_slots: maxSlots },
+      state: {
+        ...state,
+        purchased_slots: purchasedSlots,
+        max_slots: maxSlots,
+        last_cashout: lastCashoutRequest?.created_at
+      },
       machines,
       profile: profile ? { ...profile, referral_count: referralCount || 0 } : null
     }), {

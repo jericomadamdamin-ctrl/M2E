@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
@@ -8,9 +8,52 @@ interface CashoutTabProps {
   diamonds: number;
   minRequired: number;
   cooldownDays: number;
+  lastCashout?: string;
 }
 
-export const CashoutTab = ({ diamonds, minRequired, cooldownDays }: CashoutTabProps) => {
+const CashoutTimer = ({ lastCashout, cooldownDays }: { lastCashout?: string, cooldownDays: number }) => {
+  const [timeLeft, setTimeLeft] = useState<string>('');
+  const [inCooldown, setInCooldown] = useState(false);
+
+  useEffect(() => {
+    const updateTimer = () => {
+      if (!lastCashout) {
+        setInCooldown(false);
+        return;
+      }
+
+      const lastCashoutTime = new Date(lastCashout).getTime();
+      const now = Date.now();
+      const nextCashoutTime = lastCashoutTime + (cooldownDays * 24 * 60 * 60 * 1000);
+      const diff = nextCashoutTime - now;
+
+      if (diff <= 0) {
+        setInCooldown(false);
+        setTimeLeft('');
+      } else {
+        setInCooldown(true);
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        setTimeLeft(`${days}d ${hours}h ${minutes}m`);
+      }
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 60000); // Update every minute is enough for days
+    return () => clearInterval(interval);
+  }, [lastCashout, cooldownDays]);
+
+  if (!inCooldown) return null;
+
+  return (
+    <div className="text-xs text-destructive font-bold bg-destructive/10 px-2 py-1 rounded animate-pulse">
+      Cooldown: {timeLeft}
+    </div>
+  );
+};
+
+export const CashoutTab = ({ diamonds, minRequired, cooldownDays, lastCashout }: CashoutTabProps) => {
   const [amount, setAmount] = useState<number>(minRequired);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
@@ -41,7 +84,10 @@ export const CashoutTab = ({ diamonds, minRequired, cooldownDays }: CashoutTabPr
     <div className="space-y-4 pb-4">
       <div className="flex items-center justify-between px-1">
         <h2 className="font-pixel text-xs text-primary text-glow">Cashout</h2>
-        <div className="text-xs text-muted-foreground">Cooldown: {cooldownDays} days</div>
+        <div className="flex items-center gap-2">
+          <CashoutTimer lastCashout={lastCashout} cooldownDays={cooldownDays} />
+          {!lastCashout && <div className="text-xs text-muted-foreground">Cooldown: {cooldownDays} days</div>}
+        </div>
       </div>
 
       <div className="card-game rounded-xl p-4">

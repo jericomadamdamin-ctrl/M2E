@@ -144,6 +144,7 @@ const Index = () => {
               }
               refresh(true);
             }}
+            lastCashout={player.lastCashout}
           />
         )}
 
