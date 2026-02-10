@@ -4,10 +4,11 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { fetchUsers, fetchTable, updateTableRow } from '@/lib/backend';
-import { Loader2, Search, RefreshCw, User, Droplets, Gem, ShieldAlert, Filter, ChevronLeft, ChevronRight, Ban, ShieldCheck } from 'lucide-react';
+import { Loader2, Search, RefreshCw, User, Droplets, Gem, ShieldAlert, Filter, Ban, ShieldCheck } from 'lucide-react';
 import { formatCompactNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
+import { AdminPagination, paginate } from './AdminPagination';
 
 interface UserData {
     id: string;
@@ -28,7 +29,6 @@ export const AdminUsers = ({ accessKey }: { accessKey?: string }) => {
     const [roleFilter, setRoleFilter] = useState<'all' | 'admin' | 'user'>('all');
     const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'banned'>('all');
     const [currentPage, setCurrentPage] = useState(1);
-    const pageSize = 12;
 
     const loadUsers = async () => {
         if (!accessKey) return;
@@ -93,8 +93,7 @@ export const AdminUsers = ({ accessKey }: { accessKey?: string }) => {
         return matchesSearch && matchesRole && matchesStatus;
     });
 
-    const totalPages = Math.ceil(filteredUsers.length / pageSize);
-    const paginatedUsers = filteredUsers.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+    const paginatedUsers = paginate(filteredUsers, currentPage);
 
     // Reset to page 1 when filters change
     useEffect(() => { setCurrentPage(1); }, [searchTerm, roleFilter, statusFilter]);
@@ -210,32 +209,12 @@ export const AdminUsers = ({ accessKey }: { accessKey?: string }) => {
                 )}
             </div>
 
-            {/* Pagination */}
-            {totalPages > 1 && (
-                <div className="flex items-center justify-center gap-4 py-4">
-                    <Button
-                        size="sm"
-                        variant="ghost"
-                        disabled={currentPage === 1}
-                        onClick={() => setCurrentPage(p => p - 1)}
-                        className="h-9 w-9 p-0 rounded-xl bg-white/5 border border-white/5 disabled:opacity-20"
-                    >
-                        <ChevronLeft className="w-4 h-4" />
-                    </Button>
-                    <span className="text-[10px] font-bold font-mono text-primary">
-                        {String(currentPage).padStart(2, '0')} <span className="opacity-20 mx-1">/</span> {String(totalPages).padStart(2, '0')}
-                    </span>
-                    <Button
-                        size="sm"
-                        variant="ghost"
-                        disabled={currentPage === totalPages}
-                        onClick={() => setCurrentPage(p => p + 1)}
-                        className="h-9 w-9 p-0 rounded-xl bg-white/5 border border-white/5 disabled:opacity-20"
-                    >
-                        <ChevronRight className="w-4 h-4" />
-                    </Button>
-                </div>
-            )}
+            <AdminPagination
+                currentPage={currentPage}
+                totalItems={filteredUsers.length}
+                onPageChange={setCurrentPage}
+                label={`${filteredUsers.length} player${filteredUsers.length !== 1 ? 's' : ''}`}
+            />
 
             <div className="py-6 flex flex-col items-center gap-2 opacity-20">
                 <span className="text-[8px] uppercase tracking-[0.4em]">Matrix Registry Active</span>

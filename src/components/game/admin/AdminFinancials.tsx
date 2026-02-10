@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { processCashoutRound, executeCashoutPayouts, fetchPendingTransactions, verifyTransaction, rejectTransaction } from '@/lib/backend';
-import { Loader2, Play, DollarSign, CheckCircle, CreditCard, RefreshCw, Droplets, Layers } from 'lucide-react';
+import { processCashoutRound, executeCashoutPayouts, fetchPendingTransactions, verifyTransaction, rejectTransaction, verifyAllPendingTransactions } from '@/lib/backend';
+import { Loader2, Play, DollarSign, CheckCircle, CreditCard, RefreshCw, Droplets, Layers, ShieldCheck } from 'lucide-react';
 import { formatCompactNumber } from '@/lib/format';
 import { AdminStats } from '@/types/admin';
+import { AdminPagination, paginate } from './AdminPagination';
 
 interface AdminFinancialsProps {
     stats: AdminStats | null;
@@ -19,6 +20,13 @@ export const AdminFinancials = ({ stats, accessKey, onRefresh }: AdminFinancials
     const [pendingMachines, setPendingMachines] = useState<any[]>([]);
     const [pendingSlots, setPendingSlots] = useState<any[]>([]);
     const [loadingPending, setLoadingPending] = useState(false);
+    const [verifyingAll, setVerifyingAll] = useState(false);
+    const [processingId, setProcessingId] = useState<string | null>(null);
+
+    // Per-section pagination
+    const [oilPage, setOilPage] = useState(1);
+    const [machinePage, setMachinePage] = useState(1);
+    const [slotPage, setSlotPage] = useState(1);
 
     const loadPending = async () => {
         setLoadingPending(true);
@@ -27,6 +35,10 @@ export const AdminFinancials = ({ stats, accessKey, onRefresh }: AdminFinancials
             setPendingOil(data.oil);
             setPendingMachines(data.machines);
             setPendingSlots(data.slots || []);
+            // Reset pages when data reloads
+            setOilPage(1);
+            setMachinePage(1);
+            setSlotPage(1);
         } catch (err: any) {
             console.error("Failed to load pending transactions", err);
         } finally {
@@ -34,16 +46,32 @@ export const AdminFinancials = ({ stats, accessKey, onRefresh }: AdminFinancials
         }
     };
 
-    // Load pending on mount and when refresh is called
-    // We can assume onRefresh (passed from parent) might not trigger this if we don't hook into it, 
-    // but for now let's just use an effect or call it. 
-    // Actually, onRefresh from parent just refreshes stats. We should expose a refresh all.
-    // precise: let's add an effect that runs when 'stats' changes (as a signal) or just on mount.
-    // The parent 'Refresh' button re-runs fetchAdminStats. We can hook into that if we want, or just add a refresh button here.
-    // Let's add a `useEffect` to load when component mounts.
     useEffect(() => {
         loadPending();
     }, [accessKey]);
+
+    const handleVerifyAll = async () => {
+        if (!confirm('Run World API verification on ALL pending transactions with a stored transaction_id? Already-credited wallets will only get their DB status updated.')) return;
+        setVerifyingAll(true);
+        try {
+            const data = await verifyAllPendingTransactions(accessKey);
+            const { summary } = data;
+            toast({
+                title: 'Batch Verification Complete',
+                description: `Confirmed: ${summary.confirmed} (${summary.credited} newly credited), Skipped: ${summary.skipped}, Failed: ${summary.failed}`,
+                className: summary.confirmed > 0 ? 'glow-green' : undefined,
+            });
+            loadPending();
+        } catch (err: any) {
+            toast({
+                title: 'Batch Verification Failed',
+                description: err.message,
+                variant: 'destructive',
+            });
+        } finally {
+            setVerifyingAll(false);
+        }
+    };
 
     const handleVerify = async (type: 'oil' | 'machine' | 'slot', id: string) => {
         if (!confirm(`Are you sure you want to MANUALLY CONFIRM this ${type} purchase? This will grant items immediately.`)) return;
@@ -68,7 +96,7 @@ export const AdminFinancials = ({ stats, accessKey, onRefresh }: AdminFinancials
     };
 
     const handleReject = async (type: 'oil' | 'machine' | 'slot', id: string) => {
-        if (!confirm(`Are you sure you want to REJECT this purchase? It will be marked as failed.`)) return;
+        if (!confirm('Are you sure you want to REJECT this purchase? It will be marked as failed.')) return;
         setProcessingId(id);
         try {
             await rejectTransaction(type, id, accessKey);
@@ -88,12 +116,8 @@ export const AdminFinancials = ({ stats, accessKey, onRefresh }: AdminFinancials
         }
     };
 
-
-    const [processingId, setProcessingId] = useState<string | null>(null);
-
     const handleProcessRound = async (roundId: string) => {
         if (!confirm('Are you sure you want to CLOSE this round and calculate payouts? This cannot be undone.')) return;
-
         setProcessingId(roundId);
         try {
             const result = await processCashoutRound(roundId, accessKey);
@@ -116,13 +140,11 @@ export const AdminFinancials = ({ stats, accessKey, onRefresh }: AdminFinancials
 
     const handleExecutePayouts = async (roundId: string) => {
         if (!confirm('Are you sure you want to EXECUTE these payouts? This will send WLD from the backend wallet.')) return;
-
         setProcessingId(roundId);
         try {
             const result = await executeCashoutPayouts(roundId, accessKey);
             const paid = result.results.filter((r: any) => r.status === 'paid').length;
             const failed = result.results.filter((r: any) => r.status === 'failed').length;
-
             toast({
                 title: 'Execution Complete',
                 description: `Paid: ${paid}, Failed: ${failed}. Check logs for details.`,
@@ -140,105 +162,86 @@ export const AdminFinancials = ({ stats, accessKey, onRefresh }: AdminFinancials
         }
     };
 
+    const totalPending = pendingOil.length + pendingMachines.length + pendingSlots.length;
+
     return (
-        <div className="space-y-8 animate-fade-in px-1 pb-10">
-            <div className="flex justify-between items-center bg-white/5 p-4 rounded-2xl border border-white/5">
-                <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+        <div className="space-y-6 animate-fade-in px-1 pb-10">
+            {/* Header */}
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 bg-white/5 p-4 rounded-2xl border border-white/5">
+                <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary shrink-0">
                         <CreditCard className="w-5 h-5" />
                     </div>
-                    <div>
+                    <div className="min-w-0">
                         <h3 className="font-bold text-sm tracking-tight">Pending Approval</h3>
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Awaiting Verification</p>
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest">
+                            {totalPending} awaiting verification
+                        </p>
                     </div>
                 </div>
-                <Button size="sm" variant="outline" onClick={loadPending} disabled={loadingPending} className="h-9 rounded-xl border-white/10 bg-black/20">
-                    {loadingPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-                </Button>
+                <div className="flex gap-2 shrink-0">
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleVerifyAll}
+                        disabled={verifyingAll || loadingPending || totalPending === 0}
+                        className="h-9 rounded-xl border-primary/20 bg-primary/5 text-primary hover:bg-primary/10 text-[9px] font-bold uppercase tracking-widest gap-1.5 flex-1 sm:flex-none"
+                    >
+                        {verifyingAll ? <Loader2 className="w-3 h-3 animate-spin" /> : <ShieldCheck className="w-3 h-3" />}
+                        Verify All
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={loadPending} disabled={loadingPending} className="h-9 w-9 p-0 rounded-xl border-white/10 bg-black/20 shrink-0">
+                        {loadingPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                    </Button>
+                </div>
             </div>
 
             {/* Pending Sections */}
             <div className="space-y-6">
                 {/* Pending Oil */}
-                <div className="space-y-3">
-                    <div className="flex items-center gap-2 px-1">
-                        <Droplets className="w-3 h-3 text-orange-500" />
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Oil Acquisitions ({pendingOil.length})</span>
-                    </div>
-                    {pendingOil.length === 0 ? (
-                        <div className="text-center py-10 bg-white/5 rounded-2xl border border-dashed border-white/10 opacity-50">
-                            <span className="text-[10px] uppercase tracking-widest">No pending oil transfers</span>
-                        </div>
-                    ) : (
-                        <div className="grid gap-3">
-                            {pendingOil.map((tx) => (
-                                <TransactionCard
-                                    key={tx.id}
-                                    tx={tx}
-                                    type="oil"
-                                    onVerify={handleVerify}
-                                    onReject={handleReject}
-                                    processing={processingId === tx.id}
-                                />
-                            ))}
-                        </div>
-                    )}
-                </div>
+                <PendingSection
+                    icon={<Droplets className="w-3 h-3 text-orange-500" />}
+                    label="Oil Acquisitions"
+                    items={pendingOil}
+                    type="oil"
+                    page={oilPage}
+                    onPageChange={setOilPage}
+                    onVerify={handleVerify}
+                    onReject={handleReject}
+                    processingId={processingId}
+                    emptyText="No pending oil transfers"
+                />
 
                 {/* Pending Machines */}
-                <div className="space-y-3 pt-2">
-                    <div className="flex items-center gap-2 px-1">
-                        <Layers className="w-3 h-3 text-primary" />
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Machine Purchases ({pendingMachines.length})</span>
-                    </div>
-                    {pendingMachines.length === 0 ? (
-                        <div className="text-center py-10 bg-white/5 rounded-2xl border border-dashed border-white/10 opacity-50">
-                            <span className="text-[10px] uppercase tracking-widest">No pending machine orders</span>
-                        </div>
-                    ) : (
-                        <div className="grid gap-3">
-                            {pendingMachines.map((tx) => (
-                                <TransactionCard
-                                    key={tx.id}
-                                    tx={tx}
-                                    type="machine"
-                                    onVerify={handleVerify}
-                                    onReject={handleReject}
-                                    processing={processingId === tx.id}
-                                />
-                            ))}
-                        </div>
-                    )}
-                </div>
+                <PendingSection
+                    icon={<Layers className="w-3 h-3 text-primary" />}
+                    label="Machine Purchases"
+                    items={pendingMachines}
+                    type="machine"
+                    page={machinePage}
+                    onPageChange={setMachinePage}
+                    onVerify={handleVerify}
+                    onReject={handleReject}
+                    processingId={processingId}
+                    emptyText="No pending machine orders"
+                />
 
-                {/* Pending Slot Purchases */}
-                <div className="space-y-3 pt-2">
-                    <div className="flex items-center gap-2 px-1">
-                        <Layers className="w-3 h-3 text-cyan-400" />
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Slot Expansions ({pendingSlots.length})</span>
-                    </div>
-                    {pendingSlots.length === 0 ? (
-                        <div className="text-center py-10 bg-white/5 rounded-2xl border border-dashed border-white/10 opacity-50">
-                            <span className="text-[10px] uppercase tracking-widest">No pending slot purchases</span>
-                        </div>
-                    ) : (
-                        <div className="grid gap-3">
-                            {pendingSlots.map((tx) => (
-                                <TransactionCard
-                                    key={tx.id}
-                                    tx={tx}
-                                    type="slot"
-                                    onVerify={handleVerify}
-                                    onReject={handleReject}
-                                    processing={processingId === tx.id}
-                                />
-                            ))}
-                        </div>
-                    )}
-                </div>
+                {/* Pending Slots */}
+                <PendingSection
+                    icon={<Layers className="w-3 h-3 text-cyan-400" />}
+                    label="Slot Expansions"
+                    items={pendingSlots}
+                    type="slot"
+                    page={slotPage}
+                    onPageChange={setSlotPage}
+                    onVerify={handleVerify}
+                    onReject={handleReject}
+                    processingId={processingId}
+                    emptyText="No pending slot purchases"
+                />
             </div>
 
-            <div className="h-[1px] w-full bg-gradient-to-r from-transparent via-white/10 to-transparent my-8" />
+            <div className="h-[1px] w-full bg-gradient-to-r from-transparent via-white/10 to-transparent my-6" />
 
             {/* Payout Infrastructure */}
             <div className="space-y-6">
@@ -252,7 +255,7 @@ export const AdminFinancials = ({ stats, accessKey, onRefresh }: AdminFinancials
                     </div>
                 </div>
 
-                {/* Section 1: Process Rounds */}
+                {/* Phase 01: Closure */}
                 <div className="space-y-4">
                     <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 px-1 italic">Phase 01: Closure</div>
                     {stats?.open_rounds?.length === 0 ? (
@@ -262,12 +265,12 @@ export const AdminFinancials = ({ stats, accessKey, onRefresh }: AdminFinancials
                     ) : (
                         stats?.open_rounds?.map((round) => (
                             <Card key={round.id} className="bg-primary/5 border-primary/20 backdrop-blur-md overflow-hidden group">
-                                <CardHeader className="p-4 flex flex-row items-center justify-between space-y-0">
+                                <CardHeader className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0">
                                     <div>
-                                        <CardTitle className="text-sm font-bold text-primary group-hover:text-glow-sm transition-all">Round: {round.round_date}</CardTitle>
+                                        <CardTitle className="text-sm font-bold text-primary">Round: {round.round_date}</CardTitle>
                                         <p className="text-[10px] text-muted-foreground opacity-60">ID: {round.id.slice(0, 8)}</p>
                                     </div>
-                                    <div className="text-right">
+                                    <div className="sm:text-right">
                                         <div className="text-lg font-bold text-white tracking-tighter">{formatCompactNumber(round.payout_pool_wld)} WLD</div>
                                         <div className="text-[8px] uppercase tracking-widest text-primary/60 font-bold">Payout Pool</div>
                                     </div>
@@ -276,7 +279,7 @@ export const AdminFinancials = ({ stats, accessKey, onRefresh }: AdminFinancials
                                     <div className="grid grid-cols-2 gap-2 bg-black/40 p-3 rounded-xl border border-white/5">
                                         <div>
                                             <div className="text-[8px] text-muted-foreground uppercase font-bold opacity-50">Diamonds</div>
-                                            <div className="text-xs font-mono text-game-diamond">{formatCompactNumber(round.total_diamonds)} 💎</div>
+                                            <div className="text-xs font-mono text-game-diamond">{formatCompactNumber(round.total_diamonds)}</div>
                                         </div>
                                         <div>
                                             <div className="text-[8px] text-muted-foreground uppercase font-bold opacity-50">Started</div>
@@ -284,7 +287,7 @@ export const AdminFinancials = ({ stats, accessKey, onRefresh }: AdminFinancials
                                         </div>
                                     </div>
                                     <Button
-                                        className="w-full h-11 bg-primary hover:bg-primary/80 text-black font-bold uppercase tracking-widest text-xs rounded-xl shadow-[0_0_20px_rgba(var(--primary-rgb),0.2)]"
+                                        className="w-full h-11 bg-primary hover:bg-primary/80 text-black font-bold uppercase tracking-widest text-xs rounded-xl"
                                         onClick={() => handleProcessRound(round.id)}
                                         disabled={!!processingId}
                                     >
@@ -297,7 +300,7 @@ export const AdminFinancials = ({ stats, accessKey, onRefresh }: AdminFinancials
                     )}
                 </div>
 
-                {/* Section 2: Execute Payouts */}
+                {/* Phase 02: Execution */}
                 <div className="space-y-4 pt-2">
                     <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 px-1 italic">Phase 02: Execution</div>
                     {stats?.execution_rounds?.length === 0 ? (
@@ -307,12 +310,12 @@ export const AdminFinancials = ({ stats, accessKey, onRefresh }: AdminFinancials
                     ) : (
                         stats?.execution_rounds?.map((round) => (
                             <Card key={round.id} className="bg-yellow-500/5 border-yellow-500/20 backdrop-blur-md overflow-hidden">
-                                <CardHeader className="p-4 flex flex-row items-center justify-between space-y-0">
+                                <CardHeader className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0">
                                     <div>
                                         <CardTitle className="text-sm font-bold text-yellow-500">Round: {round.round_date}</CardTitle>
                                         <p className="text-[10px] text-muted-foreground opacity-60 italic">Crypto-payouts Ready</p>
                                     </div>
-                                    <div className="text-right">
+                                    <div className="sm:text-right">
                                         <div className="text-lg font-bold text-white tracking-tighter">{round.payouts?.length || 0}</div>
                                         <div className="text-[8px] uppercase tracking-widest text-yellow-500/60 font-bold">Recipients</div>
                                     </div>
@@ -339,6 +342,61 @@ export const AdminFinancials = ({ stats, accessKey, onRefresh }: AdminFinancials
     );
 };
 
+/* ── Pending Section (with pagination) ─────────────────────────── */
+
+interface PendingSectionProps {
+    icon: React.ReactNode;
+    label: string;
+    items: any[];
+    type: 'oil' | 'machine' | 'slot';
+    page: number;
+    onPageChange: (p: number) => void;
+    onVerify: (type: 'oil' | 'machine' | 'slot', id: string) => void;
+    onReject: (type: 'oil' | 'machine' | 'slot', id: string) => void;
+    processingId: string | null;
+    emptyText: string;
+}
+
+const PendingSection = ({ icon, label, items, type, page, onPageChange, onVerify, onReject, processingId, emptyText }: PendingSectionProps) => {
+    const paginatedItems = paginate(items, page);
+
+    return (
+        <div className="space-y-3">
+            <div className="flex items-center gap-2 px-1">
+                {icon}
+                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{label} ({items.length})</span>
+            </div>
+            {items.length === 0 ? (
+                <div className="text-center py-8 bg-white/5 rounded-2xl border border-dashed border-white/10 opacity-50">
+                    <span className="text-[10px] uppercase tracking-widest">{emptyText}</span>
+                </div>
+            ) : (
+                <>
+                    <div className="grid gap-3">
+                        {paginatedItems.map((tx) => (
+                            <TransactionCard
+                                key={tx.id}
+                                tx={tx}
+                                type={type}
+                                onVerify={onVerify}
+                                onReject={onReject}
+                                processing={processingId === tx.id}
+                            />
+                        ))}
+                    </div>
+                    <AdminPagination
+                        currentPage={page}
+                        totalItems={items.length}
+                        onPageChange={onPageChange}
+                    />
+                </>
+            )}
+        </div>
+    );
+};
+
+/* ── Transaction Card ──────────────────────────────────────────── */
+
 interface TransactionCardProps {
     tx: any;
     type: 'oil' | 'machine' | 'slot';
@@ -349,11 +407,11 @@ interface TransactionCardProps {
 
 const TransactionCard = ({ tx, type, onVerify, onReject, processing }: TransactionCardProps) => (
     <Card className="bg-white/5 border-white/5 backdrop-blur-sm overflow-hidden border-l-2 border-l-primary/30 group">
-        <CardContent className="p-4 space-y-4">
+        <CardContent className="p-3 sm:p-4 space-y-3">
             <div className="flex justify-between items-start gap-3">
-                <div className="min-w-0">
-                    <div className="text-[9px] text-muted-foreground uppercase font-bold tracking-[0.2em] mb-1 opacity-50">Transaction</div>
-                    <div className="flex items-center gap-2">
+                <div className="min-w-0 flex-1">
+                    <div className="text-[8px] text-muted-foreground uppercase font-bold tracking-[0.15em] mb-1 opacity-50">Transaction</div>
+                    <div className="flex items-center gap-1.5 flex-wrap">
                         {type === 'oil' && <span className="text-sm font-bold text-primary">{formatCompactNumber(tx.amount_oil)} OIL</span>}
                         {type === 'machine' && <span className="text-sm font-bold text-primary uppercase">{tx.machine_type}</span>}
                         {type === 'slot' && <span className="text-sm font-bold text-primary">{tx.slots_purchased} slots</span>}
@@ -364,36 +422,36 @@ const TransactionCard = ({ tx, type, onVerify, onReject, processing }: Transacti
                     </div>
                 </div>
                 <div className="text-right shrink-0">
-                    <div className="text-[9px] text-muted-foreground uppercase font-bold opacity-40 mb-1">User</div>
-                    <div className="text-[11px] font-bold text-glow-sm">{tx.profiles?.player_name || 'N/A'}</div>
+                    <div className="text-[8px] text-muted-foreground uppercase font-bold opacity-40 mb-1">User</div>
+                    <div className="text-[11px] font-bold">{tx.profiles?.player_name || 'N/A'}</div>
                 </div>
             </div>
 
             <div className="grid grid-cols-2 gap-2">
-                <div className="bg-black/40 p-2 rounded-lg border border-white/5">
-                    <div className="text-[8px] text-muted-foreground uppercase font-bold opacity-40 mb-1 tracking-tighter">Reference</div>
-                    <div className="text-[9px] font-mono truncate opacity-80">{tx.reference}</div>
+                <div className="bg-black/40 p-2 rounded-lg border border-white/5 min-w-0">
+                    <div className="text-[7px] text-muted-foreground uppercase font-bold opacity-40 mb-0.5 tracking-tighter">Reference</div>
+                    <div className="text-[8px] font-mono truncate opacity-80">{tx.reference || '--'}</div>
                 </div>
-                <div className="bg-black/40 p-2 rounded-lg border border-white/5">
-                    <div className="text-[8px] text-muted-foreground uppercase font-bold opacity-40 mb-1 tracking-tighter">Identity</div>
-                    <div className="text-[9px] font-mono truncate opacity-60">ID: {tx.user_id.slice(0, 10)}...</div>
+                <div className="bg-black/40 p-2 rounded-lg border border-white/5 min-w-0">
+                    <div className="text-[7px] text-muted-foreground uppercase font-bold opacity-40 mb-0.5 tracking-tighter">Identity</div>
+                    <div className="text-[8px] font-mono truncate opacity-60">ID: {tx.user_id?.slice(0, 10)}...</div>
                 </div>
             </div>
 
             <div className="flex gap-2 pt-1">
                 <Button
                     size="sm"
-                    className="flex-1 h-10 bg-green-500/10 hover:bg-green-500/20 text-green-400 border border-green-500/20 rounded-xl text-[10px] uppercase font-bold tracking-widest"
+                    className="flex-1 h-9 bg-green-500/10 hover:bg-green-500/20 text-green-400 border border-green-500/20 rounded-xl text-[9px] uppercase font-bold tracking-widest"
                     onClick={() => onVerify(type, tx.id)}
                     disabled={processing}
                 >
-                    {processing ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5 mr-2" />}
+                    {processing ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3 h-3 mr-1.5" />}
                     Confirm
                 </Button>
                 <Button
                     size="sm"
                     variant="ghost"
-                    className="h-10 px-4 text-red-500/60 hover:text-red-400 hover:bg-red-500/5 rounded-xl text-[10px] uppercase font-bold tracking-widest"
+                    className="h-9 px-3 text-red-500/60 hover:text-red-400 hover:bg-red-500/5 rounded-xl text-[9px] uppercase font-bold tracking-widest"
                     onClick={() => onReject(type, tx.id)}
                     disabled={processing}
                 >

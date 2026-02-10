@@ -50,6 +50,16 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Eagerly store transaction_id so the batch verifier can pick it up later
+    // if this function crashes before completing.
+    if (payload.transaction_id && !purchase.transaction_id) {
+      await admin
+        .from('oil_purchases')
+        .update({ transaction_id: payload.transaction_id })
+        .eq('id', purchase.id)
+        .eq('status', 'pending');
+    }
+
     const verifyRes = await fetch(`${DEV_PORTAL_API}/${payload.transaction_id}?app_id=${appId}&type=payment`, {
       headers: { Authorization: `Bearer ${apiKey}` },
     });

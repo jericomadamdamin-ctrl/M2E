@@ -319,6 +319,37 @@ export async function verifyTransaction(type: 'oil' | 'machine' | 'slot', id: st
   return data;
 }
 
+export async function verifyAllPendingTransactions(accessKey: string) {
+  const headers = authHeaders();
+  if (accessKey) headers['x-admin-key'] = accessKey;
+
+  const { data, error } = await supabase.functions.invoke('admin-payment-verify', {
+    headers,
+    body: { action: 'verify_all' },
+  });
+  if (error) await handleFunctionError(error);
+  return data as {
+    ok: boolean;
+    summary: { total: number; confirmed: number; credited: number; skipped: number; failed: number };
+    results: Array<{ id: string; type: string; status: string; credited: boolean; detail?: string }>;
+  };
+}
+
+export async function verifySingleTransaction(type: 'oil' | 'machine' | 'slot', id: string, transactionId: string, accessKey: string) {
+  const headers = authHeaders();
+  if (accessKey) headers['x-admin-key'] = accessKey;
+
+  const { data, error } = await supabase.functions.invoke('admin-payment-verify', {
+    headers,
+    body: { action: 'verify_one', type, id, transaction_id: transactionId },
+  });
+  if (error) await handleFunctionError(error);
+  return data as {
+    ok: boolean;
+    result: { id: string; type: string; status: string; credited: boolean; detail?: string };
+  };
+}
+
 export async function rejectTransaction(type: 'oil' | 'machine' | 'slot', id: string, accessKey: string) {
   const headers = authHeaders();
   if (accessKey) headers['x-admin-key'] = accessKey;

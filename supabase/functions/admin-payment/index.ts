@@ -131,14 +131,7 @@ Deno.serve(async (req) => {
                 }
 
             } else if (type === 'machine') {
-                // Underpayment guard: ensure amount_wld meets expected (±1%)
-                if (purchase.amount_wld && tx?.input_token?.amount) {
-                    const txAmount = parseFloat(tx.input_token.amount);
-                    const expected = Number(purchase.amount_wld);
-                    if (txAmount < expected * 0.99) {
-                        throw new Error('Transaction amount mismatch for machine purchase');
-                    }
-                }
+                // Manual admin override — no World API call, so no tx amount check.
                 // Grant machine into player_machines (game uses this table)
                 await admin.from('player_machines').insert({
                     user_id: purchase.user_id,
@@ -150,13 +143,7 @@ Deno.serve(async (req) => {
                 });
 
             } else if (type === 'slot') {
-                if (purchase.amount_wld && tx?.input_token?.amount) {
-                    const txAmount = parseFloat(tx.input_token.amount);
-                    const expected = Number(purchase.amount_wld);
-                    if (txAmount < expected * 0.99) {
-                        throw new Error('Transaction amount mismatch for slot purchase');
-                    }
-                }
+                // Manual admin override — no World API call, so no tx amount check.
                 // Increment purchased_slots using the existing RPC
                 const { error: slotError } = await admin.rpc('increment_slots', {
                     user_id_param: purchase.user_id,
