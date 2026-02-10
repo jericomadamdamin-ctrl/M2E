@@ -35,16 +35,17 @@ export const AdminUsers = ({ accessKey }: { accessKey?: string }) => {
             const playerStates = await fetchTable('player_state', accessKey) || [];
 
             // Join data
-            const stateMap = new Map(playerStates.map((s: any) => [s.user_id, s]));
-
-            const joinedData: UserData[] = (profiles as any[]).map((p: any) => ({
-                id: p.id,
-                player_name: p.player_name || 'Anonymous',
-                wallet_address: p.wallet_address || '',
-                created_at: p.created_at,
-                oil_balance: stateMap.get(p.id)?.oil_balance || 0,
-                diamond_balance: stateMap.get(p.id)?.diamond_balance || 0,
-            }));
+            const joinedData: UserData[] = (profiles as any[]).map((p: any) => {
+                const state = stateMap.get(p.id) as any;
+                return {
+                    id: p.id,
+                    player_name: p.player_name || 'Anonymous',
+                    wallet_address: p.wallet_address || '',
+                    created_at: p.created_at,
+                    oil_balance: state?.oil_balance || 0,
+                    diamond_balance: state?.diamond_balance || 0,
+                };
+            });
 
             // Sort by created_at desc by default
             joinedData.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
@@ -91,11 +92,11 @@ export const AdminUsers = ({ accessKey }: { accessKey?: string }) => {
                         <Table>
                             <TableHeader className="bg-secondary/20">
                                 <TableRow>
-                                    <TableHead className="w-[100px]">Joined</TableHead>
-                                    <TableHead>User</TableHead>
-                                    <TableHead>Wallet</TableHead>
-                                    <TableHead className="text-right">Oil</TableHead>
-                                    <TableHead className="text-right">Diamonds</TableHead>
+                                    <TableHead className="hidden sm:table-cell w-[100px]">Joined</TableHead>
+                                    <TableHead className="px-2 sm:px-4">User</TableHead>
+                                    <TableHead className="hidden sm:table-cell">Wallet</TableHead>
+                                    <TableHead className="text-right px-2 sm:px-4">Oil</TableHead>
+                                    <TableHead className="text-right px-2 sm:px-4">Diamonds</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -114,29 +115,32 @@ export const AdminUsers = ({ accessKey }: { accessKey?: string }) => {
                                 ) : (
                                     filteredUsers.slice(0, 50).map((user) => (
                                         <TableRow key={user.id} className="hover:bg-secondary/20 border-border/50">
-                                            <TableCell className="text-xs text-muted-foreground font-mono">
+                                            <TableCell className="hidden sm:table-cell text-xs text-muted-foreground font-mono">
                                                 {new Date(user.created_at).toLocaleDateString()}
                                             </TableCell>
-                                            <TableCell>
+                                            <TableCell className="px-2 sm:px-4">
                                                 <div className="flex items-center gap-2">
-                                                    <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary">
+                                                    <div className="w-6 h-6 sm:w-8 sm:h-8 shrink-0 rounded-full bg-primary/20 flex items-center justify-center text-[10px] sm:text-xs font-bold text-primary">
                                                         {(user.player_name || '?').charAt(0).toUpperCase()}
                                                     </div>
-                                                    <div className="flex flex-col">
-                                                        <span className="text-sm font-medium">{user.player_name}</span>
-                                                        <span className="text-[10px] text-muted-foreground font-mono opacity-50">{user.id.slice(0, 8)}...</span>
+                                                    <div className="flex flex-col min-w-0">
+                                                        <span className="text-xs sm:text-sm font-medium truncate">{user.player_name}</span>
+                                                        <span className="text-[9px] sm:text-[10px] text-muted-foreground font-mono opacity-50 truncate">
+                                                            <span className="sm:hidden">{new Date(user.created_at).toLocaleDateString()} • </span>
+                                                            {user.id.slice(0, 8)}...
+                                                        </span>
                                                     </div>
                                                 </div>
                                             </TableCell>
-                                            <TableCell className="font-mono text-xs text-muted-foreground">
+                                            <TableCell className="hidden sm:table-cell font-mono text-xs text-muted-foreground">
                                                 {user.wallet_address ? (
                                                     <span title={user.wallet_address}>{user.wallet_address.slice(0, 6)}...{user.wallet_address.slice(-4)}</span>
                                                 ) : '-'}
                                             </TableCell>
-                                            <TableCell className="text-right font-mono text-sm">
+                                            <TableCell className="text-right px-2 sm:px-4 font-mono text-[11px] sm:text-sm">
                                                 {formatCompactNumber(user.oil_balance)}
                                             </TableCell>
-                                            <TableCell className="text-right font-bold text-game-diamond">
+                                            <TableCell className="text-right px-2 sm:px-4 font-bold text-game-diamond text-[11px] sm:text-sm whitespace-nowrap">
                                                 {formatCompactNumber(user.diamond_balance)} 💎
                                             </TableCell>
                                         </TableRow>
