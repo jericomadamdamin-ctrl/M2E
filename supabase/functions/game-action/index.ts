@@ -77,16 +77,22 @@ Deno.serve(async (req) => {
 
       const capacity = getTankCapacity(config, machine.type, machine.level);
       const needed = Math.max(0, capacity - Number(machine.fuel_oil));
-      const requested = typeof payload?.amount === 'number' ? Math.floor(payload.amount) : needed;
+      let requested = typeof payload?.amount === 'number' ? Math.floor(payload.amount) : needed;
+
+      // Cap requested amount to available balance to allow partial fills
+      const currentBalance = Number(updatedState.oil_balance);
+      if (requested > currentBalance) {
+        requested = Math.floor(currentBalance);
+      }
 
       if (requested < 0) throw new Error('Invalid fuel amount');
-      if (Number(updatedState.oil_balance) <= 0) throw new Error('No OIL available to fuel');
+      if (requested === 0 && needed > 0) throw new Error('No OIL available to fuel');
 
       // Atomic Update
       const { data: rpcResult, error: rpcError } = await admin.rpc('fuel_machine_atomic', {
         p_user_id: userId,
         p_machine_id: machineId,
-        p_amount: requested, // Pass requested amount, RPC caps it to capacity
+        p_amount: requested, // Pass requested amount (capped by balance)
         p_max_capacity: capacity
       });
 

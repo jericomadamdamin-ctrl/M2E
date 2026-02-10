@@ -271,7 +271,7 @@ export const MiningTab = ({
                     size="sm"
                     variant="outline"
                     className="h-8 w-8 text-xs border-accent text-accent hover:bg-accent/20 font-bold"
-                    onClick={() => onUpgrade?.(machine.id)}
+                    onClick={() => setUpgradeId(machine.id)}
                     disabled={machine.level >= config.machines[machine.type].max_level}
                     title="Upgrade"
                   >
@@ -359,7 +359,7 @@ export const MiningTab = ({
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={confirmUpgrade} disabled={oilBalance < upgradeCost}>
-              {oilBalance < upgradeCost ? 'Insufficient OIL' : 'Confirm Upgrade'}
+              {oilBalance < upgradeCost ? 'Oil is low, please recharge!' : 'Confirm Upgrade'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

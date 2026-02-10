@@ -129,9 +129,21 @@ export async function ensurePlayerState(userId: string): Promise<PlayerStateRow>
     return data as PlayerStateRow;
   }
 
+  // Fetch welcome bonus (if configured)
+  const { data: bonusData } = await admin
+    .from('global_game_settings')
+    .select('value')
+    .eq('key', 'welcome_bonus_oil')
+    .single();
+
+  const startingOil = Number(bonusData?.value || 0);
+
   const { data: created, error: createError } = await admin
     .from('player_state')
-    .insert({ user_id: userId })
+    .insert({
+      user_id: userId,
+      oil_balance: startingOil, // Apply welcome bonus
+    })
     .select('*')
     .single();
 
