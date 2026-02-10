@@ -285,8 +285,7 @@ export const MiningTab = ({
                       variant="outline"
                       className="h-8 w-8 text-xs border-destructive text-destructive hover:bg-destructive/20"
                       onClick={() => {
-                        console.log('Discard clicked for machine:', machine.id);
-                        onDiscard(machine.id);
+                        setDiscardId(machine.id);
                       }}
                       title="Discard Machine (No Refund)"
                     >

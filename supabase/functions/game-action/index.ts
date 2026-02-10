@@ -191,6 +191,25 @@ Deno.serve(async (req) => {
       updatedState.oil_balance = Number(updatedState.oil_balance) + Number(oil_added);
     }
 
+    if (action === 'claim_daily_reward') {
+      const rewardAmount = Math.floor(Number(config.global_game_settings?.daily_oil_reward ?? 5));
+
+      const { data: rpcResult, error: rpcError } = await admin.rpc('claim_daily_reward', {
+        p_user_id: userId,
+        p_reward_amount: rewardAmount
+      });
+
+      if (rpcError) throw rpcError;
+
+      const { ok, message, new_balance, next_claim } = rpcResult as any;
+
+      if (!ok) throw new Error(message || 'Failed to claim daily reward');
+
+      updatedState.oil_balance = new_balance;
+      // We don't have last_daily_claim in state yet, but client will refetch or we can add it to state type later.
+      // For now, balance update is sufficient feedback.
+    }
+
     if (action === 'discard_machine') {
       const machineId = payload?.machineId as string;
       console.log(`Backend: Action discard_machine for machineId: ${machineId} from user: ${userId}`);

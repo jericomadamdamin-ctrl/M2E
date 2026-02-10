@@ -17,6 +17,7 @@ export interface PlayerState {
   minerals: Record<MineralType, number>;
   purchasedSlots?: number;
   maxSlots?: number;
+  totalConvertedOil?: number;
 }
 
 export interface GameConfig {
@@ -60,6 +61,9 @@ export interface GameConfig {
   treasury: {
     payout_percentage: number;
     treasury_address?: string | null;
+  };
+  global_game_settings?: {
+    daily_oil_reward: number;
   };
   referrals?: {
     bonus_diamonds: number;
