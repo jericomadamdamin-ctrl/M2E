@@ -1,6 +1,6 @@
 
 import { corsHeaders, handleOptions } from '../_shared/cors.ts';
-import { getAdminClient, requireUserId, requireAdminOrKey } from '../_shared/supabase.ts';
+import { getAdminClient, verifyAdmin } from '../_shared/supabase.ts';
 
 Deno.serve(async (req) => {
     const preflight = handleOptions(req);
@@ -14,8 +14,7 @@ Deno.serve(async (req) => {
             });
         }
 
-        const userId = await requireUserId(req);
-        await requireAdminOrKey(req, userId);
+        await verifyAdmin(req);
 
         const { table, action, id, updates } = await req.json();
 

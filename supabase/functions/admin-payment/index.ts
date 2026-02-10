@@ -1,6 +1,6 @@
 
 import { corsHeaders, handleOptions } from '../_shared/cors.ts';
-import { getAdminClient, requireUserId, requireAdminOrKey } from '../_shared/supabase.ts';
+import { getAdminClient, verifyAdmin } from '../_shared/supabase.ts';
 import { getGameConfig } from '../_shared/mining.ts';
 
 Deno.serve(async (req) => {
@@ -15,8 +15,7 @@ Deno.serve(async (req) => {
             });
         }
 
-        const userId = await requireUserId(req);
-        await requireAdminOrKey(req, userId);
+        await verifyAdmin(req);
 
         const { action, type, id } = await req.json();
         const admin = getAdminClient();

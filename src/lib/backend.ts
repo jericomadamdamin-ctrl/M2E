@@ -228,6 +228,9 @@ export async function fetchAdminStats(accessKey?: string) {
   return data as {
     open_rounds: any[];
     execution_rounds: any[];
+    total_users?: number;
+    total_oil?: number;
+    total_diamonds?: number;
   };
 }
 

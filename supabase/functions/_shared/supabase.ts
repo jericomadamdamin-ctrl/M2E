@@ -139,3 +139,14 @@ export async function requireHuman(userId: string) {
     throw new Error('Human verification required');
   }
 }
+export async function verifyAdmin(req: Request): Promise<void> {
+  const providedKey = req.headers.get('x-admin-key');
+  const requiredKey = Deno.env.get('ADMIN_ACCESS_KEY');
+
+  if (requiredKey && providedKey === requiredKey) {
+    return;
+  }
+
+  const userId = await requireUserId(req);
+  await requireAdmin(userId);
+}
