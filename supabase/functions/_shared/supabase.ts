@@ -171,8 +171,11 @@ export async function verifyAdmin(req: Request): Promise<void> {
   const allowedWallet = Deno.env.get('ADMIN_WALLET_ADDRESS');
 
   // Wallet Check (if configured)
-  if (allowedWallet && (!profile?.wallet_address || profile.wallet_address.toLowerCase() !== allowedWallet.toLowerCase())) {
-    throw new Error('Wallet address does not match authorized admin wallet');
+  if (allowedWallet) {
+    const allowedWallets = allowedWallet.split(',').map(w => w.trim().toLowerCase());
+    if (!profile?.wallet_address || !allowedWallets.includes(profile.wallet_address.toLowerCase())) {
+      throw new Error('Wallet address does not match authorized admin wallet');
+    }
   }
 
   // Auto-Promote if Key is valid (Bootstrap Admin)
