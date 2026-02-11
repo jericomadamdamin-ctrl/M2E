@@ -49,8 +49,39 @@ Deno.serve(async (req) => {
       throw new Error('Treasury address not configured');
     }
 
-    const reference = crypto.randomUUID();
     const admin = getAdminClient();
+
+    // Prevent duplicate pending purchases (race-condition guard).
+    // If the user already has a pending oil purchase created in the last 60 s
+    // with the same amount, reuse it instead of creating another row.
+    const cutoff = new Date(Date.now() - 60_000).toISOString();
+    const { data: existing } = await admin
+      .from('oil_purchases')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('status', 'pending')
+      .eq('amount_oil', oilAmount)
+      .eq('token', tokenSymbol)
+      .gte('created_at', cutoff)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (existing) {
+      return new Response(JSON.stringify({
+        ok: true,
+        reference: existing.reference,
+        token: tokenSymbol,
+        amount_token: amountToken,
+        amount_oil: oilAmount,
+        to_address: treasuryAddress,
+        description: `Buy ${oilAmount} OIL`,
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const reference = crypto.randomUUID();
 
     const { data: purchase, error } = await admin
       .from('oil_purchases')

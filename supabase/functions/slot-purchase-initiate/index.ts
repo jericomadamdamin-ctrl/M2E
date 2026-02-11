@@ -48,6 +48,34 @@ Deno.serve(async (req) => {
             throw new Error('Treasury address not configured');
         }
 
+        // Prevent duplicate pending purchases (race-condition guard).
+        const cutoff = new Date(Date.now() - 60_000).toISOString();
+        const { data: existing } = await admin
+            .from('slot_purchases')
+            .select('*')
+            .eq('user_id', userId)
+            .eq('status', 'pending')
+            .eq('slots_purchased', slotsToAdd)
+            .gte('created_at', cutoff)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+        if (existing) {
+            return new Response(JSON.stringify({
+                ok: true,
+                reference: existing.reference,
+                slots_to_add: slotsToAdd,
+                amount_wld: priceWld,
+                to_address: treasuryAddress,
+                description: `Buy ${slotsToAdd} machine slots`,
+                current_slots: currentMax,
+                new_max_slots: currentMax + slotsToAdd,
+            }), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
+        }
+
         const reference = crypto.randomUUID();
 
         // Create pending purchase record
