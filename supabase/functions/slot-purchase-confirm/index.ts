@@ -74,13 +74,16 @@ Deno.serve(async (req) => {
 
         const tx = await verifyRes.json();
 
-        if (tx?.reference && tx.reference !== reference) {
+        const txRef = tx?.reference;
+        if (txRef && txRef !== reference) {
             throw new Error('Reference mismatch');
         }
 
-        // Validation: Amount
-        if (tx?.input_token?.amount) {
-            const txAmount = parseFloat(tx.input_token.amount);
+        // Validation: Amount — World API may return camelCase or nested
+        const rawAmount = tx?.input_token?.amount ?? tx?.inputTokenAmount;
+        if (rawAmount) {
+            let txAmount = parseFloat(rawAmount);
+            if (txAmount > 1e9) txAmount = txAmount / 1e18; // raw wei → token units
             const expectedAmount = Number(purchase.amount_wld);
             if (txAmount < expectedAmount * 0.99) {
                 const clientInfo = extractClientInfo(req);
@@ -96,7 +99,8 @@ Deno.serve(async (req) => {
             }
         }
 
-        if (tx?.transaction_status === 'failed') {
+        const txStatus = tx?.transaction_status ?? tx?.transactionStatus;
+        if (txStatus === 'failed') {
             await admin
                 .from('slot_purchases')
                 .update({ status: 'failed' })
@@ -104,11 +108,11 @@ Deno.serve(async (req) => {
             throw new Error('Transaction failed on-chain');
         }
 
-        const status = tx?.transaction_status;
+        const status = txStatus;
         const minedStatuses = ['mined', 'completed', 'confirmed', 'success'];
 
         if (status && !minedStatuses.includes(status)) {
-            return new Response(JSON.stringify({ ok: true, status: tx.transaction_status }), {
+            return new Response(JSON.stringify({ ok: true, status: txStatus }), {
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             });
         }

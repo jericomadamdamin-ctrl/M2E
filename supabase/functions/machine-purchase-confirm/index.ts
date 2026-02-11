@@ -71,22 +71,21 @@ Deno.serve(async (req) => {
 
         const tx = await verifyRes.json();
 
-        if (tx?.reference && tx.reference !== payload.reference) {
+        const txRef = tx?.reference;
+        if (txRef && txRef !== payload.reference) {
             throw new Error('Reference mismatch');
         }
 
-        if (tx?.to && purchase.to_address && tx.to.toLowerCase() !== purchase.to_address.toLowerCase()) {
-            // In some envs, purchase.to_address might be undefined if not saved.
-            // But machine-purchase-initiate saves it? No, it DOES NOT save to_address in DB.
-            // It returns it to frontend.
-            // machine_purchases table schema: user_id, machine_type, amount_wld, status, reference...
-            // It does NOT store `to_address`.
-            // We can skip this check or rely on `reference` + `amount`.
+        const txTo = tx?.to ?? tx?.recipientAddress;
+        if (txTo && purchase.to_address && txTo.toLowerCase() !== purchase.to_address.toLowerCase()) {
+            // May not be stored for machines, rely on reference + amount
         }
 
-        // Verify Amount
-        if (tx?.input_token?.amount) {
-            const txAmount = parseFloat(tx.input_token.amount);
+        // Verify Amount — World API may return camelCase (inputTokenAmount) or nested input_token
+        const rawAmount = tx?.input_token?.amount ?? tx?.inputTokenAmount;
+        if (rawAmount) {
+            let txAmount = parseFloat(rawAmount);
+            if (txAmount > 1e9) txAmount = txAmount / 1e18; // raw wei → token units
             const expectedAmount = Number(purchase.amount_wld);
             // Allow 1% tolerance
             if (txAmount < expectedAmount * 0.99) {
@@ -103,7 +102,8 @@ Deno.serve(async (req) => {
             }
         }
 
-        if (tx?.transaction_status === 'failed') {
+        const txStatus = tx?.transaction_status ?? tx?.transactionStatus;
+        if (txStatus === 'failed') {
             await admin
                 .from('machine_purchases')
                 .update({ status: 'failed' })
@@ -111,10 +111,10 @@ Deno.serve(async (req) => {
             throw new Error('Transaction failed on-chain');
         }
 
-        const status = tx?.transaction_status;
+        const status = txStatus;
         const minedStatuses = ['mined', 'completed', 'confirmed', 'success'];
         if (status && !minedStatuses.includes(status)) {
-            return new Response(JSON.stringify({ ok: true, status: tx.transaction_status }), {
+            return new Response(JSON.stringify({ ok: true, status: txStatus }), {
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             });
         }

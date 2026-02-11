@@ -71,13 +71,18 @@ async function verifyOneRow(
   const tx = await verifyRes.json();
 
   /* ── 3. Reference match ─────────────────────────────────────── */
-  if (tx?.reference && purchase.reference && tx.reference !== purchase.reference) {
-    return { id, type, status: 'reference_mismatch', credited: false, detail: `tx.ref=${tx.reference} vs db.ref=${purchase.reference}` };
+  const txRef = tx?.reference;
+  if (txRef && purchase.reference && txRef !== purchase.reference) {
+    return { id, type, status: 'reference_mismatch', credited: false, detail: `tx.ref=${txRef} vs db.ref=${purchase.reference}` };
   }
 
   /* ── 4. Amount validation (±1 %) ────────────────────────────── */
-  if (tx?.input_token?.amount) {
-    const txAmount = parseFloat(tx.input_token.amount);
+  // World API may return camelCase (inputToken / inputTokenAmount) or nested input_token
+  const rawAmount = tx?.input_token?.amount ?? tx?.inputTokenAmount;
+  if (rawAmount) {
+    // inputTokenAmount is in raw wei (18 decimals for WLD/USDC), convert if needed
+    let txAmount = parseFloat(rawAmount);
+    if (txAmount > 1e9) txAmount = txAmount / 1e18; // raw wei → token units
     const expected = Number(purchase.amount_token ?? purchase.amount_wld);
     try {
       assertAmount(expected, txAmount);
@@ -96,7 +101,8 @@ async function verifyOneRow(
   }
 
   /* ── 5. Transaction status gate ─────────────────────────────── */
-  const txStatus = tx?.transaction_status;
+  // World API may return camelCase (transactionStatus) or snake_case (transaction_status)
+  const txStatus = tx?.transaction_status ?? tx?.transactionStatus;
 
   if (txStatus === 'failed') {
     await admin.from(table).update({ status: 'failed', metadata: tx }).eq('id', id);

@@ -70,18 +70,22 @@ Deno.serve(async (req) => {
 
     const tx = await verifyRes.json();
 
-    if (tx?.reference && tx.reference !== payload.reference) {
+    const txRef = tx?.reference;
+    if (txRef && txRef !== payload.reference) {
       throw new Error('Reference mismatch');
     }
 
-    if (tx?.to && purchase.to_address && tx.to.toLowerCase() !== purchase.to_address.toLowerCase()) {
+    const txTo = tx?.to ?? tx?.recipientAddress;
+    if (txTo && purchase.to_address && txTo.toLowerCase() !== purchase.to_address.toLowerCase()) {
       throw new Error('Treasury address mismatch');
     }
 
     // Phase 5: Verify transaction amount matches expected payment
-    // This prevents attacks where user initiates large purchase but sends small amount
-    if (tx?.input_token?.amount) {
-      const txAmount = parseFloat(tx.input_token.amount);
+    // World API may return camelCase (inputTokenAmount) or nested input_token
+    const rawAmount = tx?.input_token?.amount ?? tx?.inputTokenAmount;
+    if (rawAmount) {
+      let txAmount = parseFloat(rawAmount);
+      if (txAmount > 1e9) txAmount = txAmount / 1e18; // raw wei → token units
       const expectedAmount = Number(purchase.amount_token);
       // Allow 1% tolerance for rounding
       if (txAmount < expectedAmount * 0.99) {
@@ -98,7 +102,8 @@ Deno.serve(async (req) => {
       }
     }
 
-    if (tx?.transaction_status && tx.transaction_status === 'failed') {
+    const txStatus = tx?.transaction_status ?? tx?.transactionStatus;
+    if (txStatus === 'failed') {
       await admin
         .from('oil_purchases')
         .update({ status: 'failed', transaction_id: payload.transaction_id, metadata: tx })
@@ -106,7 +111,7 @@ Deno.serve(async (req) => {
       throw new Error('Transaction failed');
     }
 
-    const status = tx?.transaction_status;
+    const status = txStatus;
     const minedStatuses = ['mined', 'completed', 'confirmed', 'success'];
 
     if (status && !minedStatuses.includes(status)) {
