@@ -51,6 +51,25 @@ Deno.serve(async (req) => {
             });
         }
 
+        // Check slot limit again to prevent race conditions (initiating multiple buys)
+        const { count: machineCount, error: countError } = await admin
+            .from('player_machines')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', userId);
+
+        if (countError) throw new Error('Failed to verify slot limit');
+
+        const { data: stateData } = await admin.from('player_state').select('purchased_slots').eq('user_id', userId).single();
+        const { data: configData } = await admin.from('game_config').select('value').eq('key', 'current').single();
+
+        const slotConfig = (configData?.value as any)?.slots ?? { base_slots: 10, max_total_slots: 30 };
+        const purchasedSlots = Number(stateData?.purchased_slots ?? 0);
+        const maxSlots = Math.min(slotConfig.base_slots + purchasedSlots, slotConfig.max_total_slots);
+
+        if ((machineCount ?? 0) >= maxSlots) {
+            throw new Error(`Slot limit reached (${machineCount}/${maxSlots}). Cannot award machine.`);
+        }
+
         // Eagerly store transaction_id so the batch verifier can pick it up later
         if (payload.transaction_id && !purchase.transaction_id) {
             await admin

@@ -54,6 +54,18 @@ Deno.serve(async (req) => {
             });
         }
 
+        // Verify slot limit to prevent race condition over-purchasing
+        const { data: stateData } = await admin.from('player_state').select('purchased_slots').eq('user_id', userId).single();
+        const { data: configData } = await admin.from('game_config').select('value').eq('key', 'current').single();
+
+        const slotConfig = (configData?.value as any)?.slots ?? { base_slots: 10, max_total_slots: 30 };
+        const purchasedSlots = Number(stateData?.purchased_slots ?? 0);
+        const slotsToAdd = Number(purchase.slots_purchased);
+
+        if (slotConfig.base_slots + purchasedSlots + slotsToAdd > slotConfig.max_total_slots) {
+            throw new Error(`Slot limit exceeded. Max total slots: ${slotConfig.max_total_slots}`);
+        }
+
         // Eagerly store transaction_id so the batch verifier can pick it up later
         if (payload.transaction_id && !purchase.transaction_id) {
             await admin

@@ -139,9 +139,17 @@ Deno.serve(async (req) => {
       const machine = machines.find((m) => m.id === machineId);
 
       if (!machine) throw new Error('Machine not found');
+
       const machineConfig = config.machines[machine.type];
-      if (!machineConfig) throw new Error('Invalid machine');
+      if (!machineConfig) throw new Error(`Invalid machine type: ${machine.type}`);
+
       if (machine.level >= machineConfig.max_level) throw new Error('Machine at max level');
+
+      // Safeguard against invalid config
+      if (!config.progression?.upgrade_cost_multiplier) {
+        console.error('Missing upgrade_cost_multiplier in config');
+        throw new Error('Game config error: missing progression settings');
+      }
 
       const cost = getUpgradeCost(config, machine.type, machine.level);
 
@@ -153,11 +161,14 @@ Deno.serve(async (req) => {
         p_max_level: machineConfig.max_level
       });
 
-      if (rpcError) throw rpcError;
+      if (rpcError) {
+        console.error('RPC Error upgrade_machine_atomic:', rpcError);
+        throw new Error(`Upgrade failed: ${rpcError.message}`);
+      }
 
-      const { ok, new_balance, new_level } = rpcResult as any;
+      const { ok, new_balance, new_level, message } = rpcResult as any;
 
-      if (!ok) throw new Error('Upgrade failed');
+      if (!ok) throw new Error(message || 'Upgrade failed');
 
       patchMachine(machineId, { level: new_level });
       updatedState.oil_balance = new_balance;
