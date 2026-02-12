@@ -1,5 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
-import { GameStateResponse } from '@/types/game';
+import { GameStateResponse, Machine } from '@/types/game';
 import { getSessionToken } from '@/lib/session';
 
 export const authHeaders = () => {
@@ -212,7 +212,7 @@ export async function confirmMachinePurchase(payload: unknown) {
   });
   if (error) await handleFunctionError(error);
   // biome-ignore lint/suspicious/noExplicitAny: Machine type
-  return data as { ok: boolean; machine: any; message: string };
+  return data as { ok: boolean; machine: Machine; message: string };
 }
 
 export async function fetchAdminStats(accessKey?: string) {
@@ -226,8 +226,8 @@ export async function fetchAdminStats(accessKey?: string) {
   if (error) await handleFunctionError(error);
   // biome-ignore lint/suspicious/noExplicitAny: Admin stats type
   return data as {
-    open_rounds: any[];
-    execution_rounds: any[];
+    open_rounds: unknown[];
+    execution_rounds: unknown[];
     total_users?: number;
     total_oil?: number;
     total_diamonds?: number;
@@ -256,7 +256,7 @@ export async function executeCashoutPayouts(roundId: string, accessKey?: string)
   });
   if (error) await handleFunctionError(error);
   // biome-ignore lint/suspicious/noExplicitAny: Payout results
-  return data as { ok: boolean; results: any[] };
+  return data as { ok: boolean; results: unknown[] };
 }
 
 export async function fetchTable(table: string, accessKey?: string) {
@@ -304,7 +304,7 @@ export async function fetchPendingTransactions(accessKey: string) {
     body: { action: 'fetch_pending' },
   });
   if (error) await handleFunctionError(error);
-  return data as { oil: any[]; machines: any[]; slots?: any[] };
+  return data as { oil: unknown[]; machines: unknown[]; slots?: unknown[] };
 }
 
 export async function verifyTransaction(type: 'oil' | 'machine' | 'slot', id: string, accessKey: string) {

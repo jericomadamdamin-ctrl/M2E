@@ -165,7 +165,7 @@ export const MarketTab = ({ config, minerals, oilBalance, onExchange }: MarketTa
                   disabled={amount === 0}
                   className="text-xs"
                 >
-                  All
+                  Max
                 </Button>
                 <Button
                   size="sm"

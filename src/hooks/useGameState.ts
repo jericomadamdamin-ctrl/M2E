@@ -18,6 +18,13 @@ import { GameConfig, Machine, PlayerState, GameStateResponse, MachineType, Miner
 import { useToast } from '@/hooks/use-toast';
 import { getErrorMessage } from '@/lib/error';
 
+interface PayCommandResult {
+  finalPayload: {
+    status: 'success' | 'failed';
+    [key: string]: unknown;
+  };
+}
+
 const defaultMinerals: Record<MineralType, number> = {
   bronze: 0,
   silver: 0,
@@ -361,6 +368,7 @@ export const useGameState = () => {
     if (!miniKit.ok) {
       toast({
         title: 'World App required',
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         description: getMiniKitErrorMessage((miniKit as any).reason),
         variant: 'destructive',
       });
@@ -383,7 +391,7 @@ export const useGameState = () => {
         description: init.description,
       };
 
-      const { finalPayload } = (await MiniKit.commandsAsync.pay(payPayload)) as any;
+      const { finalPayload } = (await MiniKit.commandsAsync.pay(payPayload)) as PayCommandResult;
 
       if (finalPayload.status !== 'success') {
         throw new Error('Payment cancelled');
@@ -404,10 +412,10 @@ export const useGameState = () => {
       } else {
         throw new Error('Purchase confirmation failed');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast({
         title: 'Purchase Failed',
-        description: err?.message || 'Unable to buy machine',
+        description: (err as Error)?.message || 'Unable to buy machine',
         variant: 'destructive',
       });
       return false;
@@ -432,6 +440,7 @@ export const useGameState = () => {
     if (!miniKit.ok) {
       toast({
         title: 'World App required',
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         description: getMiniKitErrorMessage((miniKit as any).reason),
         variant: 'destructive',
       });
@@ -454,7 +463,7 @@ export const useGameState = () => {
         description: init.description,
       };
 
-      const { finalPayload } = (await MiniKit.commandsAsync.pay(payPayload)) as any;
+      const { finalPayload } = (await MiniKit.commandsAsync.pay(payPayload)) as PayCommandResult;
 
       if (finalPayload.status !== 'success') {
         throw new Error('Payment cancelled');
@@ -482,10 +491,10 @@ export const useGameState = () => {
       } else {
         throw new Error('Purchase confirmation failed');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       toast({
         title: 'Slot Purchase Failed',
-        description: err?.message || 'Unable to complete purchase',
+        description: (err as Error)?.message || 'Unable to complete purchase',
         variant: 'destructive',
       });
       return false;

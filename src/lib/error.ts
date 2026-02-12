@@ -5,8 +5,8 @@ export const getErrorMessage = (err: unknown, fallback = 'Something went wrong')
 
   if (err instanceof Error) return err.message || fallback;
 
-  if (typeof err === 'object' && 'message' in (err as any)) {
-    const message = (err as any).message;
+  if (typeof err === 'object' && err !== null && 'message' in err) {
+    const message = (err as { message: unknown }).message;
     if (typeof message === 'string') return message;
   }
 

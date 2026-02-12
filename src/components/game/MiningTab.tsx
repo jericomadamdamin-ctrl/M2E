@@ -2,7 +2,7 @@ import { Machine, GameConfig, MachineType } from '@/types/game';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Play, Square, Droplet, Plus, Trash2, ArrowUpCircle } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -13,6 +13,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { useToast } from "@/components/ui/use-toast";
 import miningMachineIcon from '@/assets/machines/mining-machine.png';
 import heavyMachineIcon from '@/assets/machines/heavy-machine.png';
@@ -20,6 +25,78 @@ import lightMachineIcon from '@/assets/machines/light-machine.png';
 import miniMachineIcon from '@/assets/machines/mini-machine.png';
 import { formatCompactNumber } from '@/lib/format';
 import { getUpgradeCost } from '@/hooks/useGameState';
+
+interface FuelPopoverProps {
+  machine: Machine;
+  capacity: number;
+  oilBalance: number;
+  onFuel: (id: string, amount: number) => void;
+}
+
+const FuelPopover = ({ machine, capacity, oilBalance, onFuel }: FuelPopoverProps) => {
+  const [amount, setAmount] = useState(0);
+  const [open, setOpen] = useState(false);
+
+  const maxFill = Math.max(0, capacity - machine.fuelOil);
+  const maxPossible = Math.min(maxFill, oilBalance);
+
+  useEffect(() => {
+    if (open) {
+      setAmount(Math.floor(maxPossible));
+    }
+  }, [open, maxPossible]);
+
+  const adjust = (delta: number) => {
+    setAmount(prev => Math.max(0, Math.min(Math.floor(maxPossible), prev + delta)));
+  };
+
+  const handleFuel = () => {
+    if (amount > 0) {
+      onFuel(machine.id, amount);
+      setOpen(false);
+    }
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          size="sm"
+          variant="secondary"
+          className="h-8 text-xs transition-transform active:scale-95 glow-green"
+          disabled={maxPossible <= 0}
+        >
+          <Droplet className="w-3 h-3 mr-1" />
+          Fuel
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-60 p-3 bg-card border-border">
+        <div className="space-y-3">
+          <div className="flex justify-between text-xs">
+            <span>Fuel Amount</span>
+            <span className="text-muted-foreground">Max: {Math.floor(maxPossible)}</span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" className="h-8 w-8 p-0" onClick={() => adjust(-10)}>-10</Button>
+            <Button size="sm" variant="outline" className="h-8 w-8 p-0" onClick={() => adjust(-1)}>-</Button>
+
+            <div className="flex-1 text-center font-bold bg-secondary/30 rounded py-1.5 text-sm">
+              {amount}
+            </div>
+
+            <Button size="sm" variant="outline" className="h-8 w-8 p-0" onClick={() => adjust(1)}>+</Button>
+            <Button size="sm" variant="outline" className="h-8 w-8 p-0" onClick={() => adjust(10)}>+10</Button>
+          </div>
+
+          <Button size="sm" className="w-full glow-green" onClick={handleFuel} disabled={amount <= 0}>
+            Confirm ({amount} OIL)
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+};
 
 interface MiningTabProps {
   userMachines: Machine[];
@@ -91,14 +168,7 @@ export const MiningTab = ({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const { toast } = useToast();
 
-  const handleFuel = (id: string) => {
-    onFuel(id);
-    toast({
-      title: "Refueling Initiated",
-      description: "Machine is being refueled...",
-      duration: 2000,
-    });
-  };
+
 
   const confirmDiscard = () => {
     if (discardId && onDiscard) {
@@ -256,16 +326,19 @@ export const MiningTab = ({
                     </Button>
                   )}
 
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    className="h-8 text-xs transition-transform active:scale-95 glow-green"
-                    onClick={() => handleFuel(machine.id)}
-                    disabled={!canFuel}
-                  >
-                    <Droplet className="w-3 h-3 mr-1" />
-                    Fuel
-                  </Button>
+                  <FuelPopover
+                    machine={machine}
+                    capacity={capacity}
+                    oilBalance={oilBalance}
+                    onFuel={(id, amount) => {
+                      onFuel(id, amount);
+                      toast({
+                        title: "Refueling Initiated",
+                        description: `Adding ${amount} OIL...`,
+                        duration: 2000,
+                      });
+                    }}
+                  />
 
                   <Button
                     size="sm"
