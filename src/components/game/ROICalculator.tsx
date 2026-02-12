@@ -1,7 +1,6 @@
-
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Calculator } from 'lucide-react';
+import { Calculator, AlertTriangle } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { GameConfig } from '@/types/game';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -10,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { formatCompactNumber } from '@/lib/format';
 import { Input } from '@/components/ui/input';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface ROICalculatorProps {
     config: GameConfig;
@@ -26,6 +26,7 @@ export const ROICalculator = ({ config }: ROICalculatorProps) => {
 
         const mConfig = config.machines[selectedMachine];
         const prog = config.progression;
+        const dailyCap = config.diamond_controls?.daily_cap_per_user || 1000;
 
         // Multipliers
         const speedMult = 1 + Math.max(0, level - 1) * prog.level_speed_multiplier;
@@ -57,10 +58,14 @@ export const ROICalculator = ({ config }: ROICalculatorProps) => {
         const oilRevenuePerHour = actionsPerHour * oilFromMineralsPerAction;
         const oilRevenuePerDay = oilRevenuePerHour * 24;
 
-        // Revenue (Diamonds)
+        // Revenue (Diamonds) - WITH CAP LOGIC
         const diamondsPerAction = config.mining.action_rewards.diamond.drop_rate_per_action;
-        const diamondsPerHour = actionsPerHour * diamondsPerAction;
-        const diamondsPerDay = diamondsPerHour * 24;
+        const uncappedDiamondsPerHour = actionsPerHour * diamondsPerAction;
+        const uncappedDiamondsPerDay = uncappedDiamondsPerHour * 24;
+
+        // Apply Cap
+        const diamondsPerDay = Math.min(uncappedDiamondsPerDay, dailyCap);
+        const isCapped = uncappedDiamondsPerDay > dailyCap;
 
         // Expenses (Fuel)
         const oilBurnPerHour = mConfig.oil_burn_per_hour * burnMult;
@@ -82,6 +87,8 @@ export const ROICalculator = ({ config }: ROICalculatorProps) => {
             oilBurnPerDay,
             oilRevenuePerDay,
             diamondsPerDay,
+            uncappedDiamondsPerDay,
+            isCapped,
             netOilPerDay,
             totalDailyProfitWld,
             roiDays
@@ -164,8 +171,18 @@ export const ROICalculator = ({ config }: ROICalculatorProps) => {
                         <StatCard
                             label="Daily Profit"
                             value={`${formatCompactNumber(stats.totalDailyProfitWld)} WLD`}
-                            subValue={`${formatCompactNumber(stats.diamondsPerDay)} Gems/Day`}
+                            subValue={
+                                stats.isCapped ? (
+                                    <span className="text-orange-400 flex items-center gap-1">
+                                        <AlertTriangle className="w-3 h-3" />
+                                        Capped at {formatCompactNumber(stats.diamondsPerDay)}
+                                    </span>
+                                ) : (
+                                    `${formatCompactNumber(stats.diamondsPerDay)} Gems/Day`
+                                )
+                            }
                             highlight={stats.totalDailyProfitWld > 0}
+                            warning={stats.isCapped}
                         />
                         <StatCard
                             label="Oil Balance/Day"
@@ -176,10 +193,22 @@ export const ROICalculator = ({ config }: ROICalculatorProps) => {
                         <StatCard
                             label="ROI Period"
                             value={stats.roiDays === Infinity || stats.roiDays < 0 ? "Never" : `${stats.roiDays.toFixed(1)} Days`}
-                            subValue="Break-even time"
+                            subValue={stats.isCapped ? "Impacted by Cap" : "Break-even time"}
                             highlight={stats.roiDays < 30 && stats.roiDays > 0}
+                            warning={stats.isCapped}
                         />
                     </div>
+
+                    {stats.isCapped && (
+                        <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-3 text-xs text-orange-200 flex gap-2 items-start">
+                            <AlertTriangle className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
+                            <div>
+                                <span className="font-bold text-orange-500">Daily Cap Limitation:</span>
+                                <br />
+                                This machine setup produces <strong>{formatCompactNumber(stats.uncappedDiamondsPerDay)}</strong> gems/day, checking against the global limit of <strong>{formatCompactNumber(stats.diamondsPerDay)}</strong>. Excess gems are converted to oil.
+                            </div>
+                        </div>
+                    )}
                 </div>
             </DialogContent>
         </Dialog>
@@ -189,16 +218,26 @@ export const ROICalculator = ({ config }: ROICalculatorProps) => {
 interface StatCardProps {
     label: string;
     value: string;
-    subValue: string;
+    subValue: string | React.ReactNode;
     highlight?: boolean;
     negative?: boolean;
+    warning?: boolean;
 }
 
-const StatCard = ({ label, value, subValue, highlight, negative }: StatCardProps) => (
-    <Card className={`bg-white/5 border-white/10 overflow-hidden ${highlight ? 'border-green-500/30 bg-green-500/5' : ''} ${negative ? 'border-red-500/30 bg-red-500/5' : ''}`}>
+const StatCard = ({ label, value, subValue, highlight, negative, warning }: StatCardProps) => (
+    <Card className={`bg-white/5 border-white/10 overflow-hidden 
+        ${highlight ? 'border-green-500/30 bg-green-500/5' : ''} 
+        ${negative ? 'border-red-500/30 bg-red-500/5' : ''}
+        ${warning ? 'border-orange-500/30 bg-orange-500/5' : ''}
+    `}>
         <CardContent className="p-3">
             <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold mb-1">{label}</div>
-            <div className={`text-lg font-bold tracking-tight ${highlight ? 'text-green-400' : ''} ${negative ? 'text-red-400' : 'text-white'}`}>
+            <div className={`text-lg font-bold tracking-tight 
+                ${highlight ? 'text-green-400' : ''} 
+                ${negative ? 'text-red-400' : ''}
+                ${warning ? 'text-orange-400' : ''}
+                ${!highlight && !negative && !warning ? 'text-white' : ''}
+            `}>
                 {value}
             </div>
             <div className="text-[9px] text-muted-foreground opacity-70 truncate">
