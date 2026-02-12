@@ -133,21 +133,29 @@ Deno.serve(async (req) => {
             } else if (type === 'machine') {
                 // Manual admin override — no World API call, so no tx amount check.
                 // Grant machine into player_machines (game uses this table)
-                await admin.from('player_machines').insert({
+                const { error: machineInsertError } = await admin.from('player_machines').insert({
+                    id: purchase.id,
                     user_id: purchase.user_id,
                     type: purchase.machine_type,
                     level: 1,
                     fuel_oil: 0,
                     is_active: false,
-                    last_processed_at: new Date().toISOString()
+                    last_processed_at: null
                 });
+                if (machineInsertError) {
+                    const msg = machineInsertError.message?.toLowerCase() || '';
+                    if (!(msg.includes('duplicate key') || msg.includes('already exists'))) {
+                        throw machineInsertError;
+                    }
+                }
 
             } else if (type === 'slot') {
                 // Manual admin override — no World API call, so no tx amount check.
-                // Increment purchased_slots using the existing RPC
-                const { error: slotError } = await admin.rpc('increment_slots', {
-                    user_id_param: purchase.user_id,
-                    slots_add: purchase.slots_purchased ?? 0,
+                // Increment purchased_slots using idempotent purchase-keyed RPC.
+                const { error: slotError } = await admin.rpc('increment_slots_for_purchase', {
+                    p_purchase_id: purchase.id,
+                    p_user_id: purchase.user_id,
+                    p_slots_add: purchase.slots_purchased ?? 0,
                 });
                 if (slotError) throw slotError;
             }

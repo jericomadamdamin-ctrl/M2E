@@ -85,7 +85,7 @@ const Index = () => {
         backgroundAttachment: 'fixed',
       }}
     >
-      <GameHeader player={player} machines={machines} onRefresh={refresh} />
+      <GameHeader player={player} machines={machines} config={config} onRefresh={refresh} />
 
       <main className="flex-1 px-3 pb-24 overflow-y-auto">
         {gameError && (

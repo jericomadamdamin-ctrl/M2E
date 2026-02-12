@@ -119,20 +119,13 @@ Deno.serve(async (req) => {
             });
         }
 
-        // Mark as confirmed
-        const { error: updateError } = await admin
-            .from('machine_purchases')
-            .update({ status: 'confirmed' }) // Store metadata if column exists?
-            .eq('id', purchase.id);
-
-        if (updateError) {
-            throw new Error('Failed to confirm purchase record');
-        }
-
-        // Award the machine to the player
-        const { data: machine, error: machineError } = await admin
+        // Award machine first using purchase.id as deterministic machine id.
+        // This makes retries idempotent if status update fails after crediting.
+        let machine: any = null;
+        const { data: insertedMachine, error: machineError } = await admin
             .from('player_machines')
             .insert({
+                id: purchase.id,
                 user_id: userId,
                 type: purchase.machine_type,
                 level: 1,
@@ -144,7 +137,34 @@ Deno.serve(async (req) => {
             .single();
 
         if (machineError) {
-            throw new Error('Failed to award machine: ' + machineError.message);
+            // If machine already exists for this purchase id, treat as already credited.
+            const msg = machineError.message?.toLowerCase() || '';
+            if (!(msg.includes('duplicate key') || msg.includes('already exists'))) {
+                throw new Error('Failed to award machine: ' + machineError.message);
+            }
+            const { data: existingMachine, error: fetchMachineError } = await admin
+                .from('player_machines')
+                .select('*')
+                .eq('id', purchase.id)
+                .eq('user_id', userId)
+                .maybeSingle();
+            if (fetchMachineError || !existingMachine) {
+                throw new Error('Machine credit state is inconsistent. Please contact support.');
+            }
+            machine = existingMachine;
+        } else {
+            machine = insertedMachine;
+        }
+
+        // Mark as confirmed only after successful credit.
+        const { error: updateError } = await admin
+            .from('machine_purchases')
+            .update({ status: 'confirmed', transaction_id: payload.transaction_id, metadata: tx })
+            .eq('id', purchase.id)
+            .eq('status', 'pending');
+
+        if (updateError) {
+            throw new Error('Failed to confirm purchase record');
         }
 
         logSecurityEvent({

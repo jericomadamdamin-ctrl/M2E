@@ -107,19 +107,32 @@ export async function checkRateLimit(
             return { allowed: false, remaining: 0 };
         }
 
-        // Record this request - use current minute as window to avoid conflicts
+        // Record this request in the current-minute bucket.
         const currentMinute = new Date();
         currentMinute.setSeconds(0, 0);
+        const bucket = currentMinute.toISOString();
 
-        await admin.from('rate_limits').upsert({
-            user_id: userId,
-            action,
-            window_start: currentMinute.toISOString(),
-            request_count: 1,
-        }, {
-            onConflict: 'user_id,action,window_start',
-            ignoreDuplicates: false,
-        });
+        const { data: existingBucket } = await admin
+            .from('rate_limits')
+            .select('id, request_count')
+            .eq('user_id', userId)
+            .eq('action', action)
+            .eq('window_start', bucket)
+            .maybeSingle();
+
+        if (existingBucket?.id) {
+            await admin
+                .from('rate_limits')
+                .update({ request_count: Number(existingBucket.request_count || 0) + 1 })
+                .eq('id', existingBucket.id);
+        } else {
+            await admin.from('rate_limits').insert({
+                user_id: userId,
+                action,
+                window_start: bucket,
+                request_count: 1,
+            });
+        }
 
         return { allowed: true, remaining: maxRequests - totalRequests - 1 };
     } catch (err) {

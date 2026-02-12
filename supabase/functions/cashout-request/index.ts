@@ -99,25 +99,14 @@ Deno.serve(async (req) => {
       const revenueWindowStart = new Date(Date.now() - MS_PER_DAY).toISOString();
       const revenueWindowEnd = now.toISOString();
 
-      const { data: revenueRows } = await admin
-        .from('oil_purchases')
-        .select('amount_wld')
-        .eq('status', 'confirmed')
-        .gte('created_at', revenueWindowStart)
-        .lte('created_at', revenueWindowEnd);
-
-      const revenueWld = (revenueRows || []).reduce((sum, r: { amount_wld: number }) => sum + Number(r.amount_wld || 0), 0);
-      const payoutPercentage = Number(config.treasury.payout_percentage || 0);
-      const payoutPool = revenueWld * payoutPercentage;
-
       const { data: createdRound } = await admin
         .from('cashout_rounds')
         .insert({
           round_date: roundDate,
           revenue_window_start: revenueWindowStart,
           revenue_window_end: revenueWindowEnd,
-          revenue_wld: revenueWld,
-          payout_pool_wld: payoutPool,
+          revenue_wld: 0,
+          payout_pool_wld: 0,
           total_diamonds: 0,
           status: 'open',
         })
@@ -129,6 +118,36 @@ Deno.serve(async (req) => {
 
     if (!round) throw new Error('Failed to open cashout round');
     if (round.status !== 'open') throw new Error('Cashout round is closed');
+
+    // Keep round pool synced with latest window revenue so users see fairer variable payouts.
+    const revenueWindowStart = round.revenue_window_start || new Date(Date.now() - MS_PER_DAY).toISOString();
+    const revenueWindowEnd = now.toISOString();
+    const { data: revenueRows } = await admin
+      .from('oil_purchases')
+      .select('amount_wld')
+      .eq('status', 'confirmed')
+      .gte('created_at', revenueWindowStart)
+      .lte('created_at', revenueWindowEnd);
+
+    const revenueWld = (revenueRows || []).reduce((sum, r: { amount_wld: number }) => sum + Number(r.amount_wld || 0), 0);
+    const payoutPercentage = Number(config.treasury.payout_percentage || 0);
+    const payoutPool = revenueWld * payoutPercentage;
+
+    const { data: refreshedRound } = await admin
+      .from('cashout_rounds')
+      .update({
+        revenue_window_start: revenueWindowStart,
+        revenue_window_end: revenueWindowEnd,
+        revenue_wld: revenueWld,
+        payout_pool_wld: payoutPool,
+      })
+      .eq('id', round.id)
+      .select('*')
+      .single();
+
+    if (refreshedRound) {
+      round = refreshedRound;
+    }
 
     // Burn diamonds on request
     const newDiamondBalance = currentDiamonds - requestedDiamonds;

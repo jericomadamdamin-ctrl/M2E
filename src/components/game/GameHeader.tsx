@@ -1,16 +1,19 @@
-import { Machine, PlayerState } from '@/types/game';
+import { Machine, PlayerState, GameConfig } from '@/types/game';
 import { Pickaxe, RefreshCw } from 'lucide-react';
 import { useState } from 'react';
 import { formatCompactNumber, formatExactNumber } from '@/lib/format';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
+import { ROICalculator } from './ROICalculator';
+
 interface GameHeaderProps {
   player: PlayerState;
   machines?: Machine[];
+  config?: GameConfig | null;
   onRefresh?: () => void;
 }
 
-export const GameHeader = ({ player, machines = [], onRefresh }: GameHeaderProps) => {
+export const GameHeader = ({ player, machines = [], config, onRefresh }: GameHeaderProps) => {
   const runningMachines = machines.filter(m => m.isActive).length;
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [oilOpen, setOilOpen] = useState(false);
@@ -46,6 +49,7 @@ export const GameHeader = ({ player, machines = [], onRefresh }: GameHeaderProps
 
         {/* Quick Stats + Refresh */}
         <div className="flex gap-2 items-center">
+          {config && <ROICalculator config={config} />}
           {onRefresh && (
             <button
               onClick={handleRefresh}

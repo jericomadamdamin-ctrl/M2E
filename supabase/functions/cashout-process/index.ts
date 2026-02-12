@@ -1,5 +1,6 @@
 import { corsHeaders, handleOptions } from '../_shared/cors.ts';
-import { getAdminClient, requireUserId, requireAdmin, requireAdminOrKey } from '../_shared/supabase.ts';
+import { getAdminClient, requireUserId, requireAdminOrKey } from '../_shared/supabase.ts';
+import { getGameConfig } from '../_shared/mining.ts';
 
 Deno.serve(async (req) => {
   const preflight = handleOptions(req);
@@ -33,6 +34,35 @@ Deno.serve(async (req) => {
     }
     if (round.status !== 'open') throw new Error(`Round ${round_id} is already ${round.status}`);
 
+    // Recompute payout pool at process time using the round window.
+    const config = await getGameConfig();
+    const revenueWindowEnd = new Date().toISOString();
+    const { data: revenueRows } = await admin
+      .from('oil_purchases')
+      .select('amount_wld')
+      .eq('status', 'confirmed')
+      .gte('created_at', round.revenue_window_start)
+      .lte('created_at', revenueWindowEnd);
+
+    const refreshedRevenueWld = (revenueRows || []).reduce((sum: number, r: any) => sum + Number(r.amount_wld || 0), 0);
+    const refreshedPayoutPool = refreshedRevenueWld * Number(config.treasury?.payout_percentage || 0);
+
+    const { data: refreshedRound, error: refreshedRoundError } = await admin
+      .from('cashout_rounds')
+      .update({
+        revenue_window_end: revenueWindowEnd,
+        revenue_wld: refreshedRevenueWld,
+        payout_pool_wld: refreshedPayoutPool,
+      })
+      .eq('id', round_id)
+      .eq('status', 'open')
+      .select('*')
+      .single();
+
+    if (refreshedRoundError || !refreshedRound) {
+      throw new Error('Failed to refresh cashout round totals');
+    }
+
     const { data: requests, error: requestsError } = await admin
       .from('cashout_requests')
       .select('*')
@@ -52,10 +82,11 @@ Deno.serve(async (req) => {
     console.log(`Found ${requests.length} requests to process`);
 
     const totalDiamonds = requests.reduce((sum: number, r: any) => sum + Number(r.diamonds_submitted || 0), 0);
-    const payoutPool = Number(round.payout_pool_wld || 0);
+    const payoutPool = Number(refreshedRound.payout_pool_wld || 0);
     console.log(`Total Diamonds: ${totalDiamonds}, Payout Pool: ${payoutPool} WLD`);
 
     let remainingPool = payoutPool;
+    const failures: string[] = [];
 
     for (let i = 0; i < requests.length; i++) {
       const reqRow = requests[i] as any;
@@ -69,17 +100,18 @@ Deno.serve(async (req) => {
 
       const { error: payoutError } = await admin
         .from('cashout_payouts')
-        .insert({
+        .upsert({
           round_id,
           user_id: reqRow.user_id,
           diamonds_burned: reqRow.diamonds_submitted,
           payout_wld: payout,
           status: 'pending',
-        });
+        }, { onConflict: 'round_id,user_id' });
 
       if (payoutError) {
-        console.error(`Failed to insert payout for user ${reqRow.user_id}:`, payoutError);
-        throw new Error(`Failed to create payout record for user ${reqRow.user_id}`);
+        console.error(`Failed to upsert payout for user ${reqRow.user_id}:`, payoutError);
+        failures.push(`payout:${reqRow.id}`);
+        continue;
       }
 
       const { error: updateRequestError } = await admin
@@ -89,7 +121,12 @@ Deno.serve(async (req) => {
 
       if (updateRequestError) {
         console.error(`Failed to update request ${reqRow.id}:`, updateRequestError);
+        failures.push(`request:${reqRow.id}`);
       }
+    }
+
+    if (failures.length > 0) {
+      throw new Error(`Round partially processed. Failed items: ${failures.length}`);
     }
 
     const { error: updateRoundError } = await admin

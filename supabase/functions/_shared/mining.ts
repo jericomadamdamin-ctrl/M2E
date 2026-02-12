@@ -10,6 +10,7 @@ type GameConfig = {
   treasury?: { payout_percentage: number; treasury_address?: string | null };
   anti_abuse?: { rate_limits?: { cashout_requests_per_day?: number } };
   referrals?: { bonus_diamonds: number };
+  global_game_settings?: { daily_oil_reward?: number; welcome_bonus_oil?: number };
 };
 
 type PlayerStateRow = {
@@ -109,6 +110,14 @@ export async function getGameConfig(): Promise<GameConfig> {
           break;
         case 'payout_percentage':
           if (config.treasury) config.treasury.payout_percentage = Number(s.value);
+          break;
+        case 'daily_oil_reward':
+          config.global_game_settings = config.global_game_settings || {};
+          config.global_game_settings.daily_oil_reward = Number(s.value);
+          break;
+        case 'welcome_bonus_oil':
+          config.global_game_settings = config.global_game_settings || {};
+          config.global_game_settings.welcome_bonus_oil = Number(s.value);
           break;
       }
     });

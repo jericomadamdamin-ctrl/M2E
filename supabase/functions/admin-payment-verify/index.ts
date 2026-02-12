@@ -200,20 +200,27 @@ async function verifyOneRow(
 
       } else if (type === 'machine') {
         const { error: machErr } = await admin.from('player_machines').insert({
+          id: purchase.id as string,
           user_id: purchase.user_id as string,
           type: purchase.machine_type as string,
           level: 1,
           fuel_oil: 0,
           is_active: false,
-          last_processed_at: new Date().toISOString(),
+          last_processed_at: null,
         });
-        if (machErr) throw machErr;
+        if (machErr) {
+          const msg = machErr.message?.toLowerCase() || '';
+          if (!(msg.includes('duplicate key') || msg.includes('already exists'))) {
+            throw machErr;
+          }
+        }
 
       } else if (type === 'slot') {
         const slots = Number(purchase.slots_purchased ?? 0);
-        const { error: slotErr } = await admin.rpc('increment_slots', {
-          user_id_param: purchase.user_id as string,
-          slots_add: slots,
+        const { error: slotErr } = await admin.rpc('increment_slots_for_purchase', {
+          p_purchase_id: purchase.id as string,
+          p_user_id: purchase.user_id as string,
+          p_slots_add: slots,
         });
         if (slotErr) throw slotErr;
       }

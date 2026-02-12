@@ -117,25 +117,27 @@ Deno.serve(async (req) => {
             });
         }
 
-        // Mark as confirmed
-        const { error: updateError } = await admin
-            .from('slot_purchases')
-            .update({ status: 'confirmed' })
-            .eq('id', purchase.id);
-
-        if (updateError) {
-            throw new Error('Failed to confirm purchase');
-        }
-
-        // Increment purchased_slots in player_state using the RPC
-        const { error: stateError } = await admin.rpc('increment_slots', {
-            user_id_param: userId,
-            slots_add: purchase.slots_purchased,
+        // Credit slots first via idempotent RPC keyed by purchase id.
+        const { error: stateError } = await admin.rpc('increment_slots_for_purchase', {
+            p_purchase_id: purchase.id,
+            p_user_id: userId,
+            p_slots_add: purchase.slots_purchased,
         });
 
         if (stateError) {
             console.error('RPC Error:', stateError);
             throw new Error(`Failed to update player state: ${stateError.message}`);
+        }
+
+        // Mark as confirmed only after successful credit.
+        const { error: updateError } = await admin
+            .from('slot_purchases')
+            .update({ status: 'confirmed', transaction_id: payload.transaction_id, metadata: tx })
+            .eq('id', purchase.id)
+            .eq('status', 'pending');
+
+        if (updateError) {
+            throw new Error('Failed to confirm purchase');
         }
 
         logSecurityEvent({

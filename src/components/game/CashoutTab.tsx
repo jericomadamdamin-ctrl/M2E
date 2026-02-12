@@ -62,6 +62,10 @@ export const CashoutTab = ({ diamonds, minRequired, cooldownDays, lastCashout }:
 
   const handleSubmit = async () => {
     if (!canRequest) return;
+    const proceed = window.confirm(
+      'Payout is variable and depends on round revenue and total submitted diamonds. Continue?'
+    );
+    if (!proceed) return;
     setLoading(true);
     try {
       await requestCashout(amount);
@@ -129,6 +133,12 @@ export const CashoutTab = ({ diamonds, minRequired, cooldownDays, lastCashout }:
             You need at least {minRequired} diamonds to request a cashout.
           </p>
         )}
+        <p className="text-[11px] text-muted-foreground">
+          Payout is variable, not fixed.
+        </p>
+        <p className="text-[11px] text-muted-foreground">
+          Formula: your payout = (your diamonds / total round diamonds) * payout pool.
+        </p>
       </div>
     </div>
   );

@@ -98,7 +98,7 @@ Deno.serve(async (req) => {
         const dailyOil = await sumConfirmed('oil_purchases', 'amount_wld');
         const dailyMachines = await sumConfirmed('machine_purchases', 'amount_wld');
         const dailySlots = await sumConfirmed('slot_purchases', 'amount_wld');
-        const dailyRevenueWld = dailyOil + dailyMachines + dailySlots;
+        const dailyRevenueWldTotal = dailyOil + dailyMachines + dailySlots;
 
         return new Response(JSON.stringify({
             open_rounds: openRounds || [],
@@ -106,7 +106,11 @@ Deno.serve(async (req) => {
             total_users: totalUsers || 0,
             total_oil: totalOil,
             total_diamonds: totalDiamonds,
-            daily_revenue_wld: dailyRevenueWld,
+            // Keep this aligned with payout-pool basis (oil purchases only).
+            daily_revenue_wld: dailyOil,
+            daily_revenue_wld_total: dailyRevenueWldTotal,
+            daily_revenue_wld_machine: dailyMachines,
+            daily_revenue_wld_slot: dailySlots,
         }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });

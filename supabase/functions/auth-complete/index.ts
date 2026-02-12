@@ -49,8 +49,6 @@ Deno.serve(async (req) => {
       throw new Error('Nonce expired');
     }
 
-    await admin.from('auth_nonces').delete().eq('nonce', nonce);
-
     // Verify SIWE message using standard siwe library
     const { message, signature, address: payloadAddress } = payload;
 
@@ -79,11 +77,17 @@ Deno.serve(async (req) => {
 
       walletAddress = siweMessage.address;
     } catch (e) {
-      // Fallback: try to extract address from payload if SIWE parsing fails
-      // This handles the World App specific payload format
+      // Fallback path for non-standard SIWE payloads:
+      // still require signature recovery + nonce presence to avoid trusting raw payload address.
       if (payloadAddress) {
-        // For World App, we trust the address from the payload since it comes from the wallet
-        walletAddress = payloadAddress;
+        const recoveredAddress = verifyMessage(message, signature);
+        if (recoveredAddress.toLowerCase() !== payloadAddress.toLowerCase()) {
+          throw new Error('Signature/address mismatch');
+        }
+        if (!message.includes(nonce)) {
+          throw new Error('Nonce mismatch');
+        }
+        walletAddress = recoveredAddress;
       } else {
         throw new Error('SIWE validation failed: ' + (e as Error).message);
       }
@@ -92,6 +96,9 @@ Deno.serve(async (req) => {
     if (!walletAddress) {
       throw new Error('Wallet address missing');
     }
+
+    // Consume nonce only after successful verification.
+    await admin.from('auth_nonces').delete().eq('nonce', nonce);
 
     let { data: profile } = await admin
       .from('profiles')

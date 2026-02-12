@@ -14,7 +14,7 @@ Deno.serve(async (req) => {
     const { state, machines } = await processMining(userId, { config });
 
     const admin = getAdminClient();
-    const { data: profile, error: profileError } = await admin
+    const { data: profile } = await admin
       .from('profiles')
       .select('player_name, is_admin, is_human_verified, wallet_address, referral_code')
       .eq('id', userId)
@@ -50,12 +50,6 @@ Deno.serve(async (req) => {
       },
       machines,
       profile: profile ? { ...profile, referral_count: referralCount || 0 } : null,
-      debug: {
-        userId,
-        hasProfile: !!profile,
-        isAdmin: profile?.is_admin,
-        profileError: profileError?.message
-      }
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
