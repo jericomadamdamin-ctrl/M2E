@@ -407,8 +407,8 @@ export const AdminFinancials = ({ stats, accessKey, onRefresh }: AdminFinancials
                                             <p className="text-[10px] text-muted-foreground opacity-60">ID: {round.id.slice(0, 8)}</p>
                                         </div>
                                         <div className="sm:text-right">
-                                            <div className="text-lg font-bold text-white tracking-tighter">{formatCompactNumber(round.payout_pool_wld)} WLD</div>
-                                            <div className="text-[8px] uppercase tracking-widest text-primary/60 font-bold">Payout Pool</div>
+                                            <div className="text-lg font-bold text-white tracking-tighter">~{((Number(round.total_diamonds || 0)) * (exchangeRate || 0.1)).toFixed(2)} WLD</div>
+                                            <div className="text-[8px] uppercase tracking-widest text-primary/60 font-bold">Est. Payout Pool</div>
                                         </div>
                                     </CardHeader>
                                     <CardContent className="p-4 pt-0 space-y-4">
