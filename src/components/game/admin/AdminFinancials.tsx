@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { processCashoutRound, executeCashoutPayouts, fetchPendingTransactions, verifyTransaction, rejectTransaction, verifyAllPendingTransactions, recalculateCashoutRound } from '@/lib/backend';
+import { processCashoutRound, executeCashoutPayouts, fetchPendingTransactions, verifyTransaction, verifySingleTransaction, rejectTransaction, verifyAllPendingTransactions, recalculateCashoutRound } from '@/lib/backend';
 import { Loader2, Play, DollarSign, CheckCircle, CreditCard, RefreshCw, Droplets, Layers, ShieldCheck, Edit, Save } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
@@ -28,11 +28,15 @@ export const AdminFinancials = ({ stats, accessKey, onRefresh }: AdminFinancials
     const [manualPool, setManualPool] = useState<string>('');
     const [editRoundId, setEditRoundId] = useState<string | null>(null);
     const [editPoolValue, setEditPoolValue] = useState<string>('');
+    const [verifyId, setVerifyId] = useState<string | null>(null);
+    const [verifyType, setVerifyType] = useState<'oil' | 'machine' | 'slot' | null>(null);
+    const [manualTxId, setManualTxId] = useState('');
 
     // Per-section pagination
     const [oilPage, setOilPage] = useState(1);
     const [machinePage, setMachinePage] = useState(1);
     const [slotPage, setSlotPage] = useState(1);
+    const [executionPage, setExecutionPage] = useState(1);
 
     const loadPending = async () => {
         setLoadingPending(true);
@@ -80,22 +84,48 @@ export const AdminFinancials = ({ stats, accessKey, onRefresh }: AdminFinancials
     };
 
     const handleVerify = async (type: 'oil' | 'machine' | 'slot', id: string) => {
-        if (!confirm(`Are you sure you want to MANUALLY CONFIRM this ${type} purchase? This will grant items immediately.`)) return;
-        setProcessingId(id);
+        // Check if we have this item in state to see if it has a tx id
+        const item = [...pendingOil, ...pendingMachines, ...pendingSlots].find(i => i.id === id);
+
+        if (item?.transaction_id) {
+            // If it has a transaction ID, use safer single verify
+            if (!confirm(`Verify this ${type} transaction with World API? Reference: ${item.reference}`)) return;
+            setProcessingId(id);
+            try {
+                await verifySingleTransaction(type, id, item.transaction_id, accessKey);
+                toast({ title: 'Verified', description: 'Transaction confirmed via World API.', className: 'glow-green' });
+                loadPending();
+            } catch (err: any) {
+                toast({ title: 'Verification Failed', description: err.message, variant: 'destructive' });
+            } finally {
+                setProcessingId(null);
+            }
+        } else {
+            // No transaction ID - prompt user
+            setVerifyType(type);
+            setVerifyId(id);
+            setManualTxId('');
+        }
+    };
+
+    const confirmManualVerify = async () => {
+        if (!verifyId || !verifyType) return;
+        setProcessingId(verifyId);
         try {
-            await verifyTransaction(type, id, accessKey);
-            toast({
-                title: 'Transaction Verified',
-                description: 'User has been credited.',
-                className: 'glow-green',
-            });
+            if (manualTxId.trim()) {
+                // Verify with provided ID
+                await verifySingleTransaction(verifyType, verifyId, manualTxId.trim(), accessKey);
+                toast({ title: 'Verified', description: 'Transaction confirmed with manual ID.', className: 'glow-green' });
+            } else {
+                // Force verify (bypass check)
+                if (!confirm("Force confirm without Transaction ID? This skips World API verification.")) throw new Error("Cancelled");
+                await verifyTransaction(verifyType, verifyId, accessKey);
+                toast({ title: 'Force Confirmed', description: 'Transaction manually confirmed.', className: 'glow-green' });
+            }
             loadPending();
+            setVerifyId(null);
         } catch (err: any) {
-            toast({
-                title: 'Verification Failed',
-                description: err.message,
-                variant: 'destructive',
-            });
+            toast({ title: 'Failed', description: err.message, variant: 'destructive' });
         } finally {
             setProcessingId(null);
         }
@@ -362,46 +392,53 @@ export const AdminFinancials = ({ stats, accessKey, onRefresh }: AdminFinancials
                                 <span className="text-[10px] uppercase tracking-widest text-muted-foreground/50">No rounds awaiting execution</span>
                             </div>
                         ) : (
-                            stats?.execution_rounds?.map((round) => (
-                                <Card key={round.id} className="bg-yellow-500/5 border-yellow-500/20 backdrop-blur-md overflow-hidden">
-                                    <CardHeader className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0">
-                                        <div>
-                                            <CardTitle className="text-sm font-bold text-yellow-500">Round: {round.round_date}</CardTitle>
-                                            <p className="text-[10px] text-muted-foreground opacity-60 italic">Crypto-payouts Ready</p>
-                                        </div>
-                                        <div className="sm:text-right">
-                                            <div className="text-lg font-bold text-white tracking-tighter flex items-center justify-end gap-2">
-                                                {formatCompactNumber(round.payout_pool_wld)} WLD
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    className="h-6 w-6 p-0 hover:bg-white/10 rounded-full"
-                                                    onClick={() => {
-                                                        setEditRoundId(round.id);
-                                                        setEditPoolValue(round.payout_pool_wld?.toString() || '');
-                                                    }}
-                                                >
-                                                    <Edit className="w-3 h-3 text-white/50" />
-                                                </Button>
+                            <>
+                                {paginate(stats?.execution_rounds || [], executionPage).map((round) => (
+                                    <Card key={round.id} className="bg-yellow-500/5 border-yellow-500/20 backdrop-blur-md overflow-hidden">
+                                        <CardHeader className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0">
+                                            <div>
+                                                <CardTitle className="text-sm font-bold text-yellow-500">Round: {round.round_date}</CardTitle>
+                                                <p className="text-[10px] text-muted-foreground opacity-60 italic">Crypto-payouts Ready</p>
                                             </div>
-                                            <div className="text-[8px] uppercase tracking-widest text-yellow-500/60 font-bold">Payout Pool</div>
-                                        </div>
-                                    </CardHeader>
-                                    <CardContent className="p-4 pt-0 space-y-4">
-                                        <div className="p-3 rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-center">
-                                            <p className="text-[10px] text-yellow-500/80 font-medium">Blockchain broadcast required. Ensure backend liquidity.</p>
-                                        </div>
-                                        <Button
-                                            className="w-full h-11 bg-yellow-600 hover:bg-yellow-700 text-white font-bold uppercase tracking-widest text-xs rounded-xl"
-                                            onClick={() => handleExecutePayouts(round.id)}
-                                            disabled={!!processingId}
-                                        >
-                                            {processingId === round.id ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <DollarSign className="w-4 h-4 mr-2" />}
-                                            Initialize Transactions
-                                        </Button>
-                                    </CardContent>
-                                </Card>
-                            ))
+                                            <div className="sm:text-right">
+                                                <div className="text-lg font-bold text-white tracking-tighter flex items-center justify-end gap-2">
+                                                    {formatCompactNumber(round.payout_pool_wld)} WLD
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="h-6 w-6 p-0 hover:bg-white/10 rounded-full"
+                                                        onClick={() => {
+                                                            setEditRoundId(round.id);
+                                                            setEditPoolValue(round.payout_pool_wld?.toString() || '');
+                                                        }}
+                                                    >
+                                                        <Edit className="w-3 h-3 text-white/50" />
+                                                    </Button>
+                                                </div>
+                                                <div className="text-[8px] uppercase tracking-widest text-yellow-500/60 font-bold">Payout Pool</div>
+                                            </div>
+                                        </CardHeader>
+                                        <CardContent className="p-4 pt-0 space-y-4">
+                                            <div className="p-3 rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-center">
+                                                <p className="text-[10px] text-yellow-500/80 font-medium">Blockchain broadcast required. Ensure backend liquidity.</p>
+                                            </div>
+                                            <Button
+                                                className="w-full h-11 bg-yellow-600 hover:bg-yellow-700 text-white font-bold uppercase tracking-widest text-xs rounded-xl"
+                                                onClick={() => handleExecutePayouts(round.id)}
+                                                disabled={!!processingId}
+                                            >
+                                                {processingId === round.id ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <DollarSign className="w-4 h-4 mr-2" />}
+                                                Initialize Transactions
+                                            </Button>
+                                        </CardContent>
+                                    </Card>
+                                ))}
+                                <AdminPagination
+                                    currentPage={executionPage}
+                                    totalItems={stats?.execution_rounds?.length || 0}
+                                    onPageChange={setExecutionPage}
+                                />
+                            </>
                         )}
                     </div>
                 </div>
@@ -432,6 +469,35 @@ export const AdminFinancials = ({ stats, accessKey, onRefresh }: AdminFinancials
                         <Button onClick={handleRecalculate} disabled={!!processingId} className="bg-primary text-black hover:bg-primary/90">
                             {processingId ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
                             Recalculate
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={!!verifyId} onOpenChange={(open) => !open && setVerifyId(null)}>
+                <DialogContent className="bg-zinc-900 border-white/10 text-white">
+                    <DialogHeader>
+                        <DialogTitle>Verify Transaction</DialogTitle>
+                        <DialogDescription>
+                            This transaction is missing a Transaction ID. You can enter one to verify against World App, or leave empty to Force Confirm (bypass verification).
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                            <Label>Transaction ID (Optional)</Label>
+                            <Input
+                                value={manualTxId}
+                                onChange={(e) => setManualTxId(e.target.value)}
+                                placeholder="0x..."
+                                className="bg-black/40 border-white/10 font-mono text-xs"
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setVerifyId(null)} className="border-white/10 hover:bg-white/5">Cancel</Button>
+                        <Button onClick={confirmManualVerify} disabled={!!processingId} className="bg-primary text-black hover:bg-primary/90">
+                            {processingId ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4 mr-2" />}
+                            {manualTxId ? 'Verify & Confirm' : 'Force Confirm'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

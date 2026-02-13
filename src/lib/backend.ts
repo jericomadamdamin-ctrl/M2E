@@ -225,13 +225,8 @@ export async function fetchAdminStats(accessKey?: string) {
   });
   if (error) await handleFunctionError(error);
   // biome-ignore lint/suspicious/noExplicitAny: Admin stats type
-  return data as {
-    open_rounds: unknown[];
-    execution_rounds: unknown[];
-    total_users?: number;
-    total_oil?: number;
-    total_diamonds?: number;
-  };
+  // biome-ignore lint/suspicious/noExplicitAny: Admin stats type
+  return data as import('@/types/admin').AdminStats;
 }
 
 export async function processCashoutRound(roundId: string, accessKey?: string, manualPoolWld?: number) {

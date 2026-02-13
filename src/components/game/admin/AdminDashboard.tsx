@@ -18,8 +18,8 @@ export const AdminDashboard = ({ stats, accessKey }: AdminDashboardProps) => {
         const now = new Date();
         const startOfDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString();
         setTodayStr(new Date(startOfDay).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }));
-        if (stats?.daily_revenue_wld !== undefined) {
-            setDailyEarnings(Number(stats.daily_revenue_wld || 0));
+        if (stats?.daily_revenue_wld_total !== undefined) {
+            setDailyEarnings(Number(stats.daily_revenue_wld_total || 0));
         }
     }, [stats]);
 

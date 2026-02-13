@@ -189,7 +189,7 @@ export const AdminTab = ({ config }: AdminTabProps) => {
                     </TabsTrigger>
                     <TabsTrigger value="financials" className="flex-1 flex flex-col gap-1 py-3 rounded-lg data-[state=active]:bg-primary/10 data-[state=active]:text-primary transition-all">
                         <Activity className="w-4 h-4" />
-                        <span className="text-[9px] uppercase font-bold tracking-tight">Vault</span>
+                        <span className="text-[9px] uppercase font-bold tracking-tight">Financials</span>
                     </TabsTrigger>
                     <TabsTrigger value="config" className="flex-1 flex flex-col gap-1 py-3 rounded-lg data-[state=active]:bg-primary/10 data-[state=active]:text-primary transition-all">
                         <Settings className="w-4 h-4" />
