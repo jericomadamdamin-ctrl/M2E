@@ -11,6 +11,8 @@ import { formatCompactNumber } from '@/lib/format';
 import { AdminStats } from '@/types/admin';
 import { AdminPagination, paginate } from './AdminPagination';
 
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+
 interface AdminFinancialsProps {
     stats: AdminStats | null;
     accessKey: string;
@@ -617,6 +619,15 @@ const PendingSection = ({ icon, label, items, type, page, onPageChange, onVerify
                     />
                 </>
             )}
+            {/* Confirmation Dialog */}
+            <ConfirmDialog
+                open={confirmOpen}
+                onOpenChange={setConfirmOpen}
+                title={confirmConfig.title}
+                description={confirmConfig.description}
+                onConfirm={confirmConfig.onConfirm}
+                variant={confirmConfig.variant}
+            />
         </div>
     );
 };
