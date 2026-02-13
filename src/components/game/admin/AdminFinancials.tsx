@@ -40,6 +40,15 @@ export const AdminFinancials = ({ stats, accessKey, onRefresh }: AdminFinancials
     const [slotPage, setSlotPage] = useState(1);
     const [executionPage, setExecutionPage] = useState(1);
 
+    // Confirmation dialog state
+    const [confirmOpen, setConfirmOpen] = useState(false);
+    const [confirmConfig, setConfirmConfig] = useState({
+        title: '',
+        description: '',
+        onConfirm: () => { },
+        variant: 'default' as 'default' | 'destructive'
+    });
+
     const loadPending = async () => {
         setLoadingPending(true);
         try {
