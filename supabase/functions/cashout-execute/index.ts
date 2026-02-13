@@ -18,8 +18,18 @@ Deno.serve(async (req) => {
             });
         }
 
-        const userId = await requireUserId(req);
-        await requireAdminOrKey(req, userId);
+        // Allow admin-key-only auth for CLI/script calls
+        const adminKey = req.headers.get('x-admin-key');
+        const requiredKey = Deno.env.get('ADMIN_ACCESS_KEY');
+
+        if (adminKey && requiredKey && adminKey === requiredKey) {
+            // Admin key auth — no session token needed
+            console.log('Admin key auth accepted for cashout-execute');
+        } else {
+            // Normal auth flow
+            const userId = await requireUserId(req);
+            await requireAdminOrKey(req, userId);
+        }
 
         const { round_id } = await req.json();
         if (!round_id) throw new Error('Missing round_id');
@@ -73,15 +83,25 @@ Deno.serve(async (req) => {
                 let tx;
 
                 if (wldContractAddress) {
+                    console.log(`Setting up WLD contract at ${wldContractAddress}`);
                     // ERC20 Transfer
                     const abi = [
-                        "function transfer(address to, uint256 value) returns (boolean)"
+                        "function transfer(address to, uint256 value) returns (bool)"
                     ];
                     const contract = new ethers.Contract(wldContractAddress, abi, wallet);
+
+                    // In ethers v6, we can use getFunction for more reliability in some environments
+                    const transferFn = contract.getFunction("transfer");
+                    if (!transferFn) {
+                        throw new Error("Transfer function not found on contract interface");
+                    }
+
                     const amountWei = ethers.parseUnits(amountWld.toString(), 18);
+                    console.log(`Sending ${amountWld} WLD (${amountWei}) to ${recipientAddress}`);
 
                     // Send transaction
-                    tx = await contract.transfer(recipientAddress, amountWei);
+                    tx = await transferFn(recipientAddress, amountWei);
+                    console.log(`Transaction sent: ${tx.hash}`);
                 } else {
                     throw new Error("WLD_CONTRACT_ADDRESS not configured");
                 }
