@@ -93,7 +93,7 @@ importers:
         specifier: ^1.2.7
         version: 1.2.8(@types/react-dom@18.3.7(@types/react@18.3.28))(@types/react@18.3.28)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@supabase/supabase-js':
-        specifier: ^2.93.3
+        specifier: ^2.95.3
         version: 2.95.3
       '@tanstack/react-query':
         specifier: ^5.83.0
