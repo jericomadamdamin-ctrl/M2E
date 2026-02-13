@@ -2,8 +2,11 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { processCashoutRound, executeCashoutPayouts, fetchPendingTransactions, verifyTransaction, rejectTransaction, verifyAllPendingTransactions } from '@/lib/backend';
-import { Loader2, Play, DollarSign, CheckCircle, CreditCard, RefreshCw, Droplets, Layers, ShieldCheck } from 'lucide-react';
+import { processCashoutRound, executeCashoutPayouts, fetchPendingTransactions, verifyTransaction, rejectTransaction, verifyAllPendingTransactions, recalculateCashoutRound } from '@/lib/backend';
+import { Loader2, Play, DollarSign, CheckCircle, CreditCard, RefreshCw, Droplets, Layers, ShieldCheck, Edit, Save } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 import { formatCompactNumber } from '@/lib/format';
 import { AdminStats } from '@/types/admin';
 import { AdminPagination, paginate } from './AdminPagination';
@@ -22,6 +25,9 @@ export const AdminFinancials = ({ stats, accessKey, onRefresh }: AdminFinancials
     const [loadingPending, setLoadingPending] = useState(false);
     const [verifyingAll, setVerifyingAll] = useState(false);
     const [processingId, setProcessingId] = useState<string | null>(null);
+    const [manualPool, setManualPool] = useState<string>('');
+    const [editRoundId, setEditRoundId] = useState<string | null>(null);
+    const [editPoolValue, setEditPoolValue] = useState<string>('');
 
     // Per-section pagination
     const [oilPage, setOilPage] = useState(1);
@@ -117,19 +123,55 @@ export const AdminFinancials = ({ stats, accessKey, onRefresh }: AdminFinancials
     };
 
     const handleProcessRound = async (roundId: string) => {
-        if (!confirm('Are you sure you want to CLOSE this round and calculate payouts? This cannot be undone.')) return;
+        const poolOverride = manualPool ? parseFloat(manualPool) : undefined;
+        const msg = poolOverride
+            ? `Close round with MANUAL POOL of ${poolOverride} WLD? Standard revenue logic will be bypassed.`
+            : 'Are you sure you want to CLOSE this round and calculate payouts? This cannot be undone.';
+
+        if (!confirm(msg)) return;
         setProcessingId(roundId);
         try {
-            const result = await processCashoutRound(roundId, accessKey);
+            const result = await processCashoutRound(roundId, accessKey, poolOverride);
             toast({
                 title: 'Round Processed',
                 description: `Calculated payouts for ${result.total_diamonds} diamonds. Pool: ${result.payout_pool} WLD.`,
                 className: 'glow-green',
             });
+            setManualPool('');
             onRefresh();
         } catch (err: any) {
             toast({
                 title: 'Processing Failed',
+                description: err.message,
+                variant: 'destructive',
+            });
+        } finally {
+            setProcessingId(null);
+        }
+    };
+
+    const handleRecalculate = async () => {
+        if (!editRoundId) return;
+        const poolVal = parseFloat(editPoolValue);
+        if (isNaN(poolVal) || poolVal < 0) {
+            toast({ title: 'Invalid Amount', description: 'Please enter a valid positive number.', variant: 'destructive' });
+            return;
+        }
+
+        setProcessingId(editRoundId);
+        try {
+            const result = await recalculateCashoutRound(editRoundId, poolVal, accessKey);
+            toast({
+                title: 'Recalculation Complete',
+                description: `Updated payouts. New Pool: ${result.payout_pool} WLD.`,
+                className: 'glow-green',
+            });
+            setEditRoundId(null);
+            setEditPoolValue('');
+            onRefresh();
+        } catch (err: any) {
+            toast({
+                title: 'Recalculation Failed',
                 description: err.message,
                 variant: 'destructive',
             });
@@ -165,180 +207,236 @@ export const AdminFinancials = ({ stats, accessKey, onRefresh }: AdminFinancials
     const totalPending = pendingOil.length + pendingMachines.length + pendingSlots.length;
 
     return (
-        <div className="space-y-6 animate-fade-in px-1 pb-10">
-            {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 bg-white/5 p-4 rounded-2xl border border-white/5">
-                <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary shrink-0">
-                        <CreditCard className="w-5 h-5" />
-                    </div>
-                    <div className="min-w-0">
-                        <h3 className="font-bold text-sm tracking-tight">Pending Approval</h3>
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest">
-                            {totalPending} awaiting verification
-                        </p>
-                    </div>
-                </div>
-                <div className="flex gap-2 shrink-0">
-                    <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={handleVerifyAll}
-                        disabled={verifyingAll || loadingPending || totalPending === 0}
-                        className="h-9 rounded-xl border-primary/20 bg-primary/5 text-primary hover:bg-primary/10 text-[9px] font-bold uppercase tracking-widest gap-1.5 flex-1 sm:flex-none"
-                    >
-                        {verifyingAll ? <Loader2 className="w-3 h-3 animate-spin" /> : <ShieldCheck className="w-3 h-3" />}
-                        Verify All
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={loadPending} disabled={loadingPending} className="h-9 w-9 p-0 rounded-xl border-white/10 bg-black/20 shrink-0">
-                        {loadingPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-                    </Button>
-                </div>
-            </div>
-
-            {/* Pending Sections */}
-            <div className="space-y-6">
-                {/* Pending Oil */}
-                <PendingSection
-                    icon={<Droplets className="w-3 h-3 text-orange-500" />}
-                    label="Oil Acquisitions"
-                    items={pendingOil}
-                    type="oil"
-                    page={oilPage}
-                    onPageChange={setOilPage}
-                    onVerify={handleVerify}
-                    onReject={handleReject}
-                    processingId={processingId}
-                    emptyText="No pending oil transfers"
-                />
-
-                {/* Pending Machines */}
-                <PendingSection
-                    icon={<Layers className="w-3 h-3 text-primary" />}
-                    label="Machine Purchases"
-                    items={pendingMachines}
-                    type="machine"
-                    page={machinePage}
-                    onPageChange={setMachinePage}
-                    onVerify={handleVerify}
-                    onReject={handleReject}
-                    processingId={processingId}
-                    emptyText="No pending machine orders"
-                />
-
-                {/* Pending Slots */}
-                <PendingSection
-                    icon={<Layers className="w-3 h-3 text-cyan-400" />}
-                    label="Slot Expansions"
-                    items={pendingSlots}
-                    type="slot"
-                    page={slotPage}
-                    onPageChange={setSlotPage}
-                    onVerify={handleVerify}
-                    onReject={handleReject}
-                    processingId={processingId}
-                    emptyText="No pending slot purchases"
-                />
-            </div>
-
-            <div className="h-[1px] w-full bg-gradient-to-r from-transparent via-white/10 to-transparent my-6" />
-
-            {/* Payout Infrastructure */}
-            <div className="space-y-6">
-                <div className="flex items-center gap-3 px-1">
-                    <div className="w-8 h-8 rounded-lg bg-yellow-500/10 flex items-center justify-center text-yellow-500">
-                        <DollarSign className="w-4 h-4" />
-                    </div>
-                    <div>
-                        <h3 className="font-bold text-sm tracking-tight text-yellow-500">Payout Protocols</h3>
-                        <p className="text-[9px] text-muted-foreground uppercase tracking-widest">Round Management</p>
-                    </div>
-                </div>
-
-                {/* Phase 01: Closure */}
-                <div className="space-y-4">
-                    <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 px-1 italic">Phase 01: Closure</div>
-                    {stats?.open_rounds?.length === 0 ? (
-                        <div className="text-center p-8 bg-white/5 rounded-2xl border border-dashed border-white/10 opacity-50">
-                            <span className="text-[10px] uppercase tracking-widest text-muted-foreground/50">All rounds processed</span>
+        <>
+            <div className="space-y-6 animate-fade-in px-1 pb-10">
+                {/* Header */}
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 bg-white/5 p-4 rounded-2xl border border-white/5">
+                    <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                            <CreditCard className="w-5 h-5" />
                         </div>
-                    ) : (
-                        stats?.open_rounds?.map((round) => (
-                            <Card key={round.id} className="bg-primary/5 border-primary/20 backdrop-blur-md overflow-hidden group">
-                                <CardHeader className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0">
-                                    <div>
-                                        <CardTitle className="text-sm font-bold text-primary">Round: {round.round_date}</CardTitle>
-                                        <p className="text-[10px] text-muted-foreground opacity-60">ID: {round.id.slice(0, 8)}</p>
-                                    </div>
-                                    <div className="sm:text-right">
-                                        <div className="text-lg font-bold text-white tracking-tighter">{formatCompactNumber(round.payout_pool_wld)} WLD</div>
-                                        <div className="text-[8px] uppercase tracking-widest text-primary/60 font-bold">Payout Pool</div>
-                                    </div>
-                                </CardHeader>
-                                <CardContent className="p-4 pt-0 space-y-4">
-                                    <div className="grid grid-cols-2 gap-2 bg-black/40 p-3 rounded-xl border border-white/5">
-                                        <div>
-                                            <div className="text-[8px] text-muted-foreground uppercase font-bold opacity-50">Diamonds</div>
-                                            <div className="text-xs font-mono text-game-diamond">{formatCompactNumber(round.total_diamonds)}</div>
-                                        </div>
-                                        <div>
-                                            <div className="text-[8px] text-muted-foreground uppercase font-bold opacity-50">Started</div>
-                                            <div className="text-xs font-mono">{new Date(round.created_at).toLocaleDateString()}</div>
-                                        </div>
-                                    </div>
-                                    <Button
-                                        className="w-full h-11 bg-primary hover:bg-primary/80 text-black font-bold uppercase tracking-widest text-xs rounded-xl"
-                                        onClick={() => handleProcessRound(round.id)}
-                                        disabled={!!processingId}
-                                    >
-                                        {processingId === round.id ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Play className="w-4 h-4 mr-2" />}
-                                        Finalize & Distribute
-                                    </Button>
-                                </CardContent>
-                            </Card>
-                        ))
-                    )}
+                        <div className="min-w-0">
+                            <h3 className="font-bold text-sm tracking-tight">Pending Approval</h3>
+                            <p className="text-[10px] text-muted-foreground uppercase tracking-widest">
+                                {totalPending} awaiting verification
+                            </p>
+                        </div>
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={handleVerifyAll}
+                            disabled={verifyingAll || loadingPending || totalPending === 0}
+                            className="h-9 rounded-xl border-primary/20 bg-primary/5 text-primary hover:bg-primary/10 text-[9px] font-bold uppercase tracking-widest gap-1.5 flex-1 sm:flex-none"
+                        >
+                            {verifyingAll ? <Loader2 className="w-3 h-3 animate-spin" /> : <ShieldCheck className="w-3 h-3" />}
+                            Verify All
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={loadPending} disabled={loadingPending} className="h-9 w-9 p-0 rounded-xl border-white/10 bg-black/20 shrink-0">
+                            {loadingPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                        </Button>
+                    </div>
                 </div>
 
-                {/* Phase 02: Execution */}
-                <div className="space-y-4 pt-2">
-                    <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 px-1 italic">Phase 02: Execution</div>
-                    {stats?.execution_rounds?.length === 0 ? (
-                        <div className="text-center p-8 bg-white/5 rounded-2xl border border-dashed border-white/10 opacity-50">
-                            <span className="text-[10px] uppercase tracking-widest text-muted-foreground/50">No rounds awaiting execution</span>
+                {/* Pending Sections */}
+                <div className="space-y-6">
+                    {/* Pending Oil */}
+                    <PendingSection
+                        icon={<Droplets className="w-3 h-3 text-orange-500" />}
+                        label="Oil Acquisitions"
+                        items={pendingOil}
+                        type="oil"
+                        page={oilPage}
+                        onPageChange={setOilPage}
+                        onVerify={handleVerify}
+                        onReject={handleReject}
+                        processingId={processingId}
+                        emptyText="No pending oil transfers"
+                    />
+
+                    {/* Pending Machines */}
+                    <PendingSection
+                        icon={<Layers className="w-3 h-3 text-primary" />}
+                        label="Machine Purchases"
+                        items={pendingMachines}
+                        type="machine"
+                        page={machinePage}
+                        onPageChange={setMachinePage}
+                        onVerify={handleVerify}
+                        onReject={handleReject}
+                        processingId={processingId}
+                        emptyText="No pending machine orders"
+                    />
+
+                    {/* Pending Slots */}
+                    <PendingSection
+                        icon={<Layers className="w-3 h-3 text-cyan-400" />}
+                        label="Slot Expansions"
+                        items={pendingSlots}
+                        type="slot"
+                        page={slotPage}
+                        onPageChange={setSlotPage}
+                        onVerify={handleVerify}
+                        onReject={handleReject}
+                        processingId={processingId}
+                        emptyText="No pending slot purchases"
+                    />
+                </div>
+
+                <div className="h-[1px] w-full bg-gradient-to-r from-transparent via-white/10 to-transparent my-6" />
+
+                {/* Payout Infrastructure */}
+                <div className="space-y-6">
+                    <div className="flex items-center gap-3 px-1">
+                        <div className="w-8 h-8 rounded-lg bg-yellow-500/10 flex items-center justify-center text-yellow-500">
+                            <DollarSign className="w-4 h-4" />
                         </div>
-                    ) : (
-                        stats?.execution_rounds?.map((round) => (
-                            <Card key={round.id} className="bg-yellow-500/5 border-yellow-500/20 backdrop-blur-md overflow-hidden">
-                                <CardHeader className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0">
-                                    <div>
-                                        <CardTitle className="text-sm font-bold text-yellow-500">Round: {round.round_date}</CardTitle>
-                                        <p className="text-[10px] text-muted-foreground opacity-60 italic">Crypto-payouts Ready</p>
-                                    </div>
-                                    <div className="sm:text-right">
-                                        <div className="text-lg font-bold text-white tracking-tighter">{round.payouts?.length || 0}</div>
-                                        <div className="text-[8px] uppercase tracking-widest text-yellow-500/60 font-bold">Recipients</div>
-                                    </div>
-                                </CardHeader>
-                                <CardContent className="p-4 pt-0 space-y-4">
-                                    <div className="p-3 rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-center">
-                                        <p className="text-[10px] text-yellow-500/80 font-medium">Blockchain broadcast required. Ensure backend liquidity.</p>
-                                    </div>
-                                    <Button
-                                        className="w-full h-11 bg-yellow-600 hover:bg-yellow-700 text-white font-bold uppercase tracking-widest text-xs rounded-xl"
-                                        onClick={() => handleExecutePayouts(round.id)}
-                                        disabled={!!processingId}
-                                    >
-                                        {processingId === round.id ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <DollarSign className="w-4 h-4 mr-2" />}
-                                        Initialize Transactions
-                                    </Button>
-                                </CardContent>
-                            </Card>
-                        ))
-                    )}
+                        <div>
+                            <h3 className="font-bold text-sm tracking-tight text-yellow-500">Payout Protocols</h3>
+                            <p className="text-[9px] text-muted-foreground uppercase tracking-widest">Round Management</p>
+                        </div>
+                    </div>
+
+                    {/* Phase 01: Closure */}
+                    <div className="space-y-4">
+                        <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 px-1 italic">Phase 01: Closure</div>
+                        {stats?.open_rounds?.length === 0 ? (
+                            <div className="text-center p-8 bg-white/5 rounded-2xl border border-dashed border-white/10 opacity-50">
+                                <span className="text-[10px] uppercase tracking-widest text-muted-foreground/50">All rounds processed</span>
+                            </div>
+                        ) : (
+                            stats?.open_rounds?.map((round) => (
+                                <Card key={round.id} className="bg-primary/5 border-primary/20 backdrop-blur-md overflow-hidden group">
+                                    <CardHeader className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0">
+                                        <div>
+                                            <CardTitle className="text-sm font-bold text-primary">Round: {round.round_date}</CardTitle>
+                                            <p className="text-[10px] text-muted-foreground opacity-60">ID: {round.id.slice(0, 8)}</p>
+                                        </div>
+                                        <div className="sm:text-right">
+                                            <div className="text-lg font-bold text-white tracking-tighter">{formatCompactNumber(round.payout_pool_wld)} WLD</div>
+                                            <div className="text-[8px] uppercase tracking-widest text-primary/60 font-bold">Payout Pool</div>
+                                        </div>
+                                    </CardHeader>
+                                    <CardContent className="p-4 pt-0 space-y-4">
+                                        <div className="grid grid-cols-2 gap-2 bg-black/40 p-3 rounded-xl border border-white/5">
+                                            <div>
+                                                <div className="text-[8px] text-muted-foreground uppercase font-bold opacity-50">Diamonds</div>
+                                                <div className="text-xs font-mono text-game-diamond">{formatCompactNumber(round.total_diamonds)}</div>
+                                            </div>
+                                            <div>
+                                                <div className="text-[8px] text-muted-foreground uppercase font-bold opacity-50">Started</div>
+                                                <div className="text-xs font-mono">{new Date(round.created_at).toLocaleDateString()}</div>
+                                            </div>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <div className="flex items-center gap-2">
+                                                <Input
+                                                    placeholder="Override Pool (Optional)"
+                                                    className="bg-black/40 border-white/10 h-9 font-mono text-xs"
+                                                    type="number"
+                                                    value={manualPool}
+                                                    onChange={(e) => setManualPool(e.target.value)}
+                                                />
+                                            </div>
+                                            <Button
+                                                className="w-full h-11 bg-primary hover:bg-primary/80 text-black font-bold uppercase tracking-widest text-xs rounded-xl"
+                                                onClick={() => handleProcessRound(round.id)}
+                                                disabled={!!processingId}
+                                            >
+                                                {processingId === round.id ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Play className="w-4 h-4 mr-2" />}
+                                                Finalize & Distribute
+                                            </Button>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            ))
+                        )}
+                    </div>
+
+                    {/* Phase 02: Execution */}
+                    <div className="space-y-4 pt-2">
+                        <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60 px-1 italic">Phase 02: Execution</div>
+                        {stats?.execution_rounds?.length === 0 ? (
+                            <div className="text-center p-8 bg-white/5 rounded-2xl border border-dashed border-white/10 opacity-50">
+                                <span className="text-[10px] uppercase tracking-widest text-muted-foreground/50">No rounds awaiting execution</span>
+                            </div>
+                        ) : (
+                            stats?.execution_rounds?.map((round) => (
+                                <Card key={round.id} className="bg-yellow-500/5 border-yellow-500/20 backdrop-blur-md overflow-hidden">
+                                    <CardHeader className="p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-2 sm:space-y-0">
+                                        <div>
+                                            <CardTitle className="text-sm font-bold text-yellow-500">Round: {round.round_date}</CardTitle>
+                                            <p className="text-[10px] text-muted-foreground opacity-60 italic">Crypto-payouts Ready</p>
+                                        </div>
+                                        <div className="sm:text-right">
+                                            <div className="text-lg font-bold text-white tracking-tighter flex items-center justify-end gap-2">
+                                                {formatCompactNumber(round.payout_pool_wld)} WLD
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-6 w-6 p-0 hover:bg-white/10 rounded-full"
+                                                    onClick={() => {
+                                                        setEditRoundId(round.id);
+                                                        setEditPoolValue(round.payout_pool_wld?.toString() || '');
+                                                    }}
+                                                >
+                                                    <Edit className="w-3 h-3 text-white/50" />
+                                                </Button>
+                                            </div>
+                                            <div className="text-[8px] uppercase tracking-widest text-yellow-500/60 font-bold">Payout Pool</div>
+                                        </div>
+                                    </CardHeader>
+                                    <CardContent className="p-4 pt-0 space-y-4">
+                                        <div className="p-3 rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-center">
+                                            <p className="text-[10px] text-yellow-500/80 font-medium">Blockchain broadcast required. Ensure backend liquidity.</p>
+                                        </div>
+                                        <Button
+                                            className="w-full h-11 bg-yellow-600 hover:bg-yellow-700 text-white font-bold uppercase tracking-widest text-xs rounded-xl"
+                                            onClick={() => handleExecutePayouts(round.id)}
+                                            disabled={!!processingId}
+                                        >
+                                            {processingId === round.id ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <DollarSign className="w-4 h-4 mr-2" />}
+                                            Initialize Transactions
+                                        </Button>
+                                    </CardContent>
+                                </Card>
+                            ))
+                        )}
+                    </div>
                 </div>
             </div>
-        </div>
+
+            <Dialog open={!!editRoundId} onOpenChange={(open) => !open && setEditRoundId(null)}>
+                <DialogContent className="bg-zinc-900 border-white/10 text-white">
+                    <DialogHeader>
+                        <DialogTitle>Recalculate Round Pool</DialogTitle>
+                        <DialogDescription>
+                            Manually override the total WLD payout pool for this round. This will recalculate the WLD amount for EVERY recipient in this round.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                            <Label>New Pool Amount (WLD)</Label>
+                            <Input
+                                type="number"
+                                value={editPoolValue}
+                                onChange={(e) => setEditPoolValue(e.target.value)}
+                                placeholder="e.g. 500"
+                                className="bg-black/40 border-white/10"
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setEditRoundId(null)} className="border-white/10 hover:bg-white/5">Cancel</Button>
+                        <Button onClick={handleRecalculate} disabled={!!processingId} className="bg-primary text-black hover:bg-primary/90">
+                            {processingId ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                            Recalculate
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+        </>
     );
 };
 

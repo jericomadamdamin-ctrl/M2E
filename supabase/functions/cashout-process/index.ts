@@ -2,7 +2,50 @@ import { corsHeaders, handleOptions } from '../_shared/cors.ts';
 import { getAdminClient, requireUserId, requireAdminOrKey } from '../_shared/supabase.ts';
 import { getGameConfig } from '../_shared/mining.ts';
 
-Deno.serve(async (req) => {
+interface CashoutRequestBody {
+  round_id: string;
+  manual_pool_wld?: number;
+  action?: 'recalculate' | 'process';
+}
+
+interface CashoutRound {
+  id: string;
+  status: string;
+  payout_pool_wld?: number;
+  total_diamonds?: number;
+  revenue_window_start?: string;
+  revenue_window_end?: string;
+  revenue_wld?: number;
+  round_date?: string;
+  created_at?: string;
+}
+
+interface CashoutPayout {
+  id: string;
+  round_id: string;
+  user_id: string;
+  diamonds_burned: number;
+  payout_wld: number;
+  status: string;
+}
+
+interface CashoutRequest {
+  id: string;
+  payout_round_id: string;
+  user_id: string;
+  diamonds_submitted: number;
+  status: string;
+  created_at: string;
+}
+
+interface OilPurchase {
+  amount_wld?: number;
+  status?: string;
+  created_at?: string;
+}
+
+
+Deno.serve(async (req: Request) => {
   const preflight = handleOptions(req);
   if (preflight) return preflight;
 
@@ -17,9 +60,9 @@ Deno.serve(async (req) => {
     const userId = await requireUserId(req);
     await requireAdminOrKey(req, userId);
 
-    const { round_id } = await req.json();
+    const { round_id, manual_pool_wld, action } = await req.json() as CashoutRequestBody;
     if (!round_id) throw new Error('Missing round_id');
-    console.log(`Processing cashout round: ${round_id}`);
+    console.log(`Processing cashout round: ${round_id}, Action: ${action || 'process'}, Manual Pool: ${manual_pool_wld}`);
 
     const admin = getAdminClient();
     const { data: round, error: roundError } = await admin
@@ -32,27 +75,113 @@ Deno.serve(async (req) => {
       console.error('Round not found:', roundError);
       throw new Error(`Round not found: ${round_id}`);
     }
+
+    // --- MODE 1: RECALCULATE CLOSED ROUND ---
+    if (action === 'recalculate') {
+      if (round.status !== 'closed') {
+        throw new Error(`Cannot recalculate round ${round_id} because it is ${round.status} (must be 'closed')`);
+      }
+      if (typeof manual_pool_wld !== 'number' || manual_pool_wld < 0) {
+        throw new Error('Valid manual_pool_wld is required for recalculation');
+      }
+
+      console.log(`Recalculating round ${round_id} with new pool: ${manual_pool_wld}`);
+
+      // 1. Update round pool
+      const { error: updateRoundError } = await admin
+        .from('cashout_rounds')
+        .update({ payout_pool_wld: manual_pool_wld })
+        .eq('id', round_id);
+
+      if (updateRoundError) throw new Error('Failed to update round pool');
+
+      // 2. Fetch all payouts
+      const { data: payouts, error: payoutsError } = await admin
+        .from('cashout_payouts')
+        .select('*')
+        .eq('round_id', round_id);
+
+      if (payoutsError) throw new Error('Failed to fetch payouts for recalculation');
+
+      // 3. Recalculate each user's share
+      const totalDiamonds = Number(round.total_diamonds || 0);
+      const newPool = manual_pool_wld;
+
+      if (totalDiamonds <= 0) {
+        console.warn('Total diamonds is 0, skipping recalculation of shares');
+        return new Response(JSON.stringify({ ok: true, message: 'Pool updated, but no diamonds to distribute.' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      let remainingPool = newPool;
+      const failures: string[] = [];
+
+      for (let i = 0; i < payouts.length; i++) {
+        const payoutRow = payouts[i];
+        const share = Number(payoutRow.diamonds_burned) / totalDiamonds;
+        let newPayout = newPool * share;
+
+        if (i === payouts.length - 1) {
+          newPayout = Math.max(0, remainingPool); // Handle dust
+        }
+        remainingPool = Math.max(0, remainingPool - newPayout);
+
+        const { error: updatePayoutError } = await admin
+          .from('cashout_payouts')
+          .update({ payout_wld: newPayout })
+          .eq('id', payoutRow.id);
+
+        if (updatePayoutError) {
+          console.error(`Failed to update payout ${payoutRow.id}:`, updatePayoutError);
+          failures.push(payoutRow.id);
+        }
+      }
+
+      if (failures.length > 0) throw new Error(`Recalculation partial failure. Failed items: ${failures.length}`);
+
+      return new Response(JSON.stringify({
+        ok: true,
+        total_diamonds: totalDiamonds,
+        payout_pool: newPool,
+        message: `Recalculated ${payouts.length} payouts successfully`
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // --- MODE 2: PROCESS OPEN ROUND (Default) ---
     if (round.status !== 'open') throw new Error(`Round ${round_id} is already ${round.status}`);
 
-    // Recompute payout pool at process time using the round window.
-    const config = await getGameConfig();
-    const revenueWindowEnd = new Date().toISOString();
-    const { data: revenueRows } = await admin
-      .from('oil_purchases')
-      .select('amount_wld')
-      .eq('status', 'confirmed')
-      .gte('created_at', round.revenue_window_start)
-      .lte('created_at', revenueWindowEnd);
 
-    const refreshedRevenueWld = (revenueRows || []).reduce((sum: number, r: any) => sum + Number(r.amount_wld || 0), 0);
-    const refreshedPayoutPool = refreshedRevenueWld * Number(config.treasury?.payout_percentage || 0);
+
+    // Unified Flow:
+    let refreshedRevenueWld = 0;
+    {
+      const { data: revenueRows } = await admin
+        .from('oil_purchases')
+        .select('amount_wld')
+        .eq('status', 'confirmed')
+        .gte('created_at', round.revenue_window_start)
+        .lte('created_at', revenueWindowEnd);
+      refreshedRevenueWld = (revenueRows || []).reduce((sum: number, r: OilPurchase) => sum + Number(r.amount_wld || 0), 0);
+    }
+
+    // If manual is set, use it. Else calculate from config.
+    let targetPool = 0;
+    if (manual_pool_wld !== undefined && manual_pool_wld !== null) {
+      targetPool = Number(manual_pool_wld);
+    } else {
+      const config = await getGameConfig();
+      targetPool = refreshedRevenueWld * Number(config.treasury?.payout_percentage || 0);
+    }
 
     const { data: refreshedRound, error: refreshedRoundError } = await admin
       .from('cashout_rounds')
       .update({
         revenue_window_end: revenueWindowEnd,
         revenue_wld: refreshedRevenueWld,
-        payout_pool_wld: refreshedPayoutPool,
+        payout_pool_wld: targetPool, // Use our resolved target
       })
       .eq('id', round_id)
       .eq('status', 'open')
@@ -81,7 +210,7 @@ Deno.serve(async (req) => {
 
     console.log(`Found ${requests.length} requests to process`);
 
-    const totalDiamonds = requests.reduce((sum: number, r: any) => sum + Number(r.diamonds_submitted || 0), 0);
+    const totalDiamonds = requests.reduce((sum: number, r: CashoutRequest) => sum + Number(r.diamonds_submitted || 0), 0);
     const payoutPool = Number(refreshedRound.payout_pool_wld || 0);
     console.log(`Total Diamonds: ${totalDiamonds}, Payout Pool: ${payoutPool} WLD`);
 
@@ -89,7 +218,7 @@ Deno.serve(async (req) => {
     const failures: string[] = [];
 
     for (let i = 0; i < requests.length; i++) {
-      const reqRow = requests[i] as any;
+      const reqRow = requests[i] as CashoutRequest;
       const share = totalDiamonds > 0 ? Number(reqRow.diamonds_submitted) / totalDiamonds : 0;
       let payout = payoutPool * share;
 

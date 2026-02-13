@@ -234,13 +234,25 @@ export async function fetchAdminStats(accessKey?: string) {
   };
 }
 
-export async function processCashoutRound(roundId: string, accessKey?: string) {
+export async function processCashoutRound(roundId: string, accessKey?: string, manualPoolWld?: number) {
   const headers = authHeaders();
   if (accessKey) headers['x-admin-key'] = accessKey;
 
   const { data, error } = await supabase.functions.invoke('cashout-process', {
     headers,
-    body: { round_id: roundId },
+    body: { round_id: roundId, manual_pool_wld: manualPoolWld },
+  });
+  if (error) await handleFunctionError(error);
+  return data as { ok: boolean; total_diamonds: number; payout_pool: number };
+}
+
+export async function recalculateCashoutRound(roundId: string, manualPoolWld: number, accessKey?: string) {
+  const headers = authHeaders();
+  if (accessKey) headers['x-admin-key'] = accessKey;
+
+  const { data, error } = await supabase.functions.invoke('cashout-process', {
+    headers,
+    body: { round_id: roundId, manual_pool_wld: manualPoolWld, action: 'recalculate' },
   });
   if (error) await handleFunctionError(error);
   return data as { ok: boolean; total_diamonds: number; payout_pool: number };
