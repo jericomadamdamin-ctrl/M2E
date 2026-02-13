@@ -397,6 +397,21 @@ export async function fetchPlayerState(userId: string, accessKey: string) {
   return fetchTable('player_state', accessKey);
 }
 
+export async function fetchGlobalGameSettings(accessKey: string) {
+  try {
+    const { data, error } = await supabase.functions.invoke('global-settings-fetch', {
+      body: { accessKey }
+    });
+    if (error) throw error;
+    return data;
+  } catch (err) {
+    console.error('Error fetching global settings:', err);
+    return {
+      diamond_wld_exchange_rate: 0.1 // Default fallback
+    };
+  }
+}
+
 /**
  * Get treasury wallet WLD balance from game config
  * Returns a simulated balance check - in production, integrate with actual blockchain query

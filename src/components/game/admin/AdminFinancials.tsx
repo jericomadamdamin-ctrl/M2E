@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { processCashoutRound, executeCashoutPayouts, fetchPendingTransactions, verifyTransaction, verifySingleTransaction, rejectTransaction, verifyAllPendingTransactions, recalculateCashoutRound, checkTreasuryBalance } from '@/lib/backend';
+import { processCashoutRound, executeCashoutPayouts, fetchPendingTransactions, verifyTransaction, verifySingleTransaction, rejectTransaction, verifyAllPendingTransactions, recalculateCashoutRound, checkTreasuryBalance, fetchGlobalGameSettings } from '@/lib/backend';
 import { Loader2, Play, DollarSign, CheckCircle, CreditCard, RefreshCw, Droplets, Layers, ShieldCheck, Edit, Save } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
@@ -33,6 +33,7 @@ export const AdminFinancials = ({ stats, accessKey, onRefresh }: AdminFinancials
     const [verifyId, setVerifyId] = useState<string | null>(null);
     const [verifyType, setVerifyType] = useState<'oil' | 'machine' | 'slot' | null>(null);
     const [manualTxId, setManualTxId] = useState('');
+    const [exchangeRate, setExchangeRate] = useState<number | null>(null);
 
     // Per-section pagination
     const [oilPage, setOilPage] = useState(1);
@@ -69,6 +70,12 @@ export const AdminFinancials = ({ stats, accessKey, onRefresh }: AdminFinancials
 
     useEffect(() => {
         loadPending();
+        // Fetch exchange rate
+        fetchGlobalGameSettings(accessKey).then(settings => {
+            if (settings?.diamond_wld_exchange_rate) {
+                setExchangeRate(settings.diamond_wld_exchange_rate);
+            }
+        });
     }, [accessKey]);
 
     const handleVerifyAll = async () => {
@@ -167,89 +174,72 @@ export const AdminFinancials = ({ stats, accessKey, onRefresh }: AdminFinancials
         try {
             console.log('[handleProcessRound] Starting for round:', roundId);
 
-            // Find the round to get diamond count
+            // Find the round
             const round = stats?.open_rounds?.find(r => r.id === roundId);
             if (!round) {
-                console.error('[handleProcessRound] Round not found in stats.open_rounds');
-                toast({
-                    title: '❌ Round Not Found',
-                    description: 'Could not find this round in open rounds. Please refresh the page.',
-                    variant: 'destructive',
-                });
+                toast({ title: '❌ Round Not Found', description: 'Please refresh.', variant: 'destructive' });
                 return;
             }
 
             const poolOverride = manualPools[roundId] ? parseFloat(manualPools[roundId]) : undefined;
 
-            // Calculate expected pool amount
-            const exchangeRate = 0.1; // TODO: Fetch from global_game_settings
-            const expectedPool = poolOverride || (Number(round.total_diamonds || 0) * exchangeRate);
-
-            console.log('[handleProcessRound] Pool calculation:', { poolOverride, expectedPool, diamonds: round.total_diamonds, exchangeRate });
+            // Use fetched exchange rate or default
+            const rate = exchangeRate || 0.1;
+            const expectedPool = poolOverride || (Number(round.total_diamonds || 0) * rate);
 
             // Check treasury balance
             try {
                 const balanceCheck = await checkTreasuryBalance(expectedPool);
-                console.log('[handleProcessRound] Balance check result:', balanceCheck);
-
                 if (!balanceCheck.sufficient) {
                     toast({
                         title: '⚠️ Treasury Balance Low',
-                        description: `Treasury has ${balanceCheck.balance.toFixed(2)} WLD but needs ${expectedPool.toFixed(2)} WLD. Please load the treasury wallet before finalizing.`,
+                        description: `Treasury has ${balanceCheck.balance.toFixed(2)} WLD but needs ${expectedPool.toFixed(2)} WLD.`,
                         variant: 'destructive',
                         duration: 8000,
                     });
                     return;
                 }
-            } catch (balanceError: any) {
-                console.error('[handleProcessRound] Balance check error:', balanceError);
-                toast({
-                    title: '⚠️ Balance Check Failed',
-                    description: `Could not verify treasury balance: ${balanceError.message}. Proceeding anyway.`,
-                    duration: 5000,
-                });
-                // Continue anyway
+            } catch (err) {
+                console.error('Balance check failed', err);
             }
 
-            const msg = poolOverride
-                ? `Close round with MANUAL POOL of ${poolOverride} WLD? Standard revenue logic will be bypassed.`
-                : 'Are you sure you want to CLOSE this round and calculate payouts? This cannot be undone.';
+            // Construct dialog message
+            const description = poolOverride
+                ? `⚠️ MANUAL OVERRIDE: Closing round with ${poolOverride} WLD pool (Ignoring rate).`
+                : `Close round and distribute ${expectedPool.toFixed(2)} WLD? (Based on ${formatCompactNumber(round.total_diamonds)} diamonds @ ${rate} WLD/diamond)`;
 
-            if (!confirm(msg)) {
-                console.log('[handleProcessRound] User cancelled confirmation');
-                toast({
-                    title: 'Cancelled',
-                    description: 'Round finalization cancelled.',
-                });
-                return;
-            }
-
-            setProcessingId(roundId);
-            console.log('[handleProcessRound] Processing round...');
-
-            const result = await processCashoutRound(roundId, accessKey, poolOverride);
-            console.log('[handleProcessRound] Success:', result);
-
-            toast({
-                title: '✅ Round Processed',
-                description: `Calculated payouts for ${result.total_diamonds} diamonds. Pool: ${result.payout_pool} WLD.`,
-                className: 'glow-green',
+            // Open confirmation dialog
+            setConfirmConfig({
+                title: poolOverride ? 'Confirm Manual Override' : 'Finalize & Distribute',
+                description,
+                variant: poolOverride ? 'destructive' : 'default',
+                onConfirm: async () => {
+                    setProcessingId(roundId);
+                    try {
+                        const result = await processCashoutRound(roundId, accessKey, poolOverride);
+                        toast({
+                            title: '✅ Round Processed',
+                            description: `Distributed ${result.payout_pool} WLD for ${result.total_diamonds} diamonds.`,
+                            className: 'glow-green',
+                        });
+                        setManualPools(prev => {
+                            const next = { ...prev };
+                            delete next[roundId];
+                            return next;
+                        });
+                        onRefresh();
+                    } catch (err: any) {
+                        toast({ title: 'Failed', description: err.message, variant: 'destructive' });
+                    } finally {
+                        setProcessingId(null);
+                        setConfirmOpen(false);
+                    }
+                }
             });
-            setManualPools(prev => {
-                const next = { ...prev };
-                delete next[roundId];
-                return next;
-            });
-            onRefresh();
+            setConfirmOpen(true);
         } catch (err: any) {
-            console.error('[handleProcessRound] Error:', err);
-            toast({
-                title: '❌ Processing Failed',
-                description: err.message || 'An unknown error occurred',
-                variant: 'destructive',
-            });
-        } finally {
-            setProcessingId(null);
+            console.error('Error in handleProcessRound:', err);
+            toast({ title: 'Error', description: err.message, variant: 'destructive' });
         }
     };
 
