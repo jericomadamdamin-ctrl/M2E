@@ -257,19 +257,18 @@ Deno.serve(async (req: Request) => {
       requestsToProcess = approvedRequestsList;
     } else {
       // Ghost Round (0 total) or already done
+      // Ghost Round (0 total) or already done
       if ((allRequests || []).length === 0) {
-        console.warn('Ghost round detected (0 requests). Closing.');
-        const { error: closeError } = await admin.from('cashout_rounds').update({
-          status: 'closed',
-          payout_pool_wld: 0,
-          total_diamonds: 0,
-          revenue_window_end: revenueWindowEnd,
-          revenue_wld: refreshedRevenueWld
-        }).eq('id', round_id);
-        if (closeError) throw closeError;
-        return new Response(JSON.stringify({ ok: true, message: 'Ghost round closed' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        // DIAGNOSTIC BLOCK: Why are there 0 requests?
+        const { count: totalRequests } = await admin.from('cashout_requests').select('*', { count: 'exact', head: true });
+        const { count: orphanRequests } = await admin.from('cashout_requests').select('*', { count: 'exact', head: true }).is('payout_round_id', null);
+        const { count: currentRoundAnyStatus } = await admin.from('cashout_requests').select('*', { count: 'exact', head: true }).eq('payout_round_id', round_id);
+
+        console.warn(`Diagnostics: Total Requests: ${totalRequests}, Orphans: ${orphanRequests}, This Round Any: ${currentRoundAnyStatus}`);
+
+        throw new Error(`No requests found for round ${round_id}. DB Stats: Total=${totalRequests}, Orphans=${orphanRequests}, ThisRound=${currentRoundAnyStatus}. Missing link?`);
       }
-      throw new Error('No pending requests found (and no approved requests to recover).');
+      throw new Error(`Found ${allRequests.length} requests but none are 'pending' or 'approved'. Statuses: ${allRequests.map((r: any) => r.status).join(',')}`);
     }
 
     // 3. Calculation
