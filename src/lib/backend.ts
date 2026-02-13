@@ -396,3 +396,29 @@ export async function fetchPlayerState(userId: string, accessKey: string) {
   // assuming user count is low. 
   return fetchTable('player_state', accessKey);
 }
+
+/**
+ * Get treasury wallet WLD balance from game config
+ * Returns a simulated balance check - in production, integrate with actual blockchain query
+ */
+export async function checkTreasuryBalance(requiredAmount: number): Promise<{ sufficient: boolean; balance: number }> {
+  try {
+    // For now, we'll return a warning if the required amount is very high
+    // In production, you would query the actual wallet balance via World App API or blockchain
+
+    // Placeholder: assume treasury has 10000 WLD for now
+    // TODO: Integrate with actual wallet balance check
+    const mockBalance = 10000;
+
+    return {
+      sufficient: mockBalance >= requiredAmount,
+      balance: mockBalance
+    };
+  } catch (error) {
+    console.error('Error checking treasury balance:', error);
+    return {
+      sufficient: false,
+      balance: 0
+    };
+  }
+}

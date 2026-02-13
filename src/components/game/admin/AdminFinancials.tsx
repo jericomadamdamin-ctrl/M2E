@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { processCashoutRound, executeCashoutPayouts, fetchPendingTransactions, verifyTransaction, verifySingleTransaction, rejectTransaction, verifyAllPendingTransactions, recalculateCashoutRound } from '@/lib/backend';
+import { processCashoutRound, executeCashoutPayouts, fetchPendingTransactions, verifyTransaction, verifySingleTransaction, rejectTransaction, verifyAllPendingTransactions, recalculateCashoutRound, checkTreasuryBalance } from '@/lib/backend';
 import { Loader2, Play, DollarSign, CheckCircle, CreditCard, RefreshCw, Droplets, Layers, ShieldCheck, Edit, Save } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
@@ -153,7 +153,35 @@ export const AdminFinancials = ({ stats, accessKey, onRefresh }: AdminFinancials
     };
 
     const handleProcessRound = async (roundId: string) => {
+        // Find the round to get diamond count
+        const round = stats?.open_rounds?.find(r => r.id === roundId);
+        if (!round) {
+            toast({
+                title: 'Error',
+                description: 'Round not found',
+                variant: 'destructive',
+            });
+            return;
+        }
+
         const poolOverride = manualPools[roundId] ? parseFloat(manualPools[roundId]) : undefined;
+
+        // Calculate expected pool amount
+        const exchangeRate = 0.1; // TODO: Fetch from global_game_settings
+        const expectedPool = poolOverride || (Number(round.total_diamonds || 0) * exchangeRate);
+
+        // Check treasury balance
+        const balanceCheck = await checkTreasuryBalance(expectedPool);
+        if (!balanceCheck.sufficient) {
+            toast({
+                title: '⚠️ Treasury Balance Low',
+                description: `Treasury has ${balanceCheck.balance.toFixed(2)} WLD but needs ${expectedPool.toFixed(2)} WLD. Please load the treasury wallet before finalizing.`,
+                variant: 'destructive',
+                duration: 8000,
+            });
+            return;
+        }
+
         const msg = poolOverride
             ? `Close round with MANUAL POOL of ${poolOverride} WLD? Standard revenue logic will be bypassed.`
             : 'Are you sure you want to CLOSE this round and calculate payouts? This cannot be undone.';
