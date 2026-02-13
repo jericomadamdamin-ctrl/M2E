@@ -153,9 +153,40 @@ Deno.serve(async (req: Request) => {
     // --- MODE 2: PROCESS OPEN ROUND (Default) ---
     if (round.status !== 'open') throw new Error(`Round ${round_id} is already ${round.status}`);
 
+    // Calculate revenue window end time
+    const revenueWindowEnd = new Date().toISOString();
 
+    // Fetch total diamonds for this round
+    const { data: pendingRequests, error: pendingRequestsError } = await admin
+      .from('cashout_requests')
+      .select('diamonds_submitted')
+      .eq('payout_round_id', round_id)
+      .eq('status', 'pending');
 
-    // Unified Flow:
+    if (pendingRequestsError) throw new Error('Failed to fetch cashout requests');
+
+    const roundTotalDiamonds = (pendingRequests || []).reduce((sum: number, r: any) => sum + Number(r.diamonds_submitted || 0), 0);
+
+    // Fetch diamond exchange rate from global settings
+    const { data: exchangeRateSetting } = await admin
+      .from('global_game_settings')
+      .select('value')
+      .eq('key', 'diamond_wld_exchange_rate')
+      .single();
+
+    const exchangeRate = Number(exchangeRateSetting?.value || 0.1);
+
+    // Calculate pool: manual override takes precedence, otherwise use exchange rate
+    let targetPool = 0;
+    if (manual_pool_wld !== undefined && manual_pool_wld !== null) {
+      targetPool = Number(manual_pool_wld);
+      console.log(`Using manual pool override: ${targetPool} WLD`);
+    } else {
+      targetPool = roundTotalDiamonds * exchangeRate;
+      console.log(`Calculated pool: ${roundTotalDiamonds} diamonds × ${exchangeRate} rate = ${targetPool} WLD`);
+    }
+
+    // Still track revenue for historical purposes
     let refreshedRevenueWld = 0;
     {
       const { data: revenueRows } = await admin
@@ -165,15 +196,6 @@ Deno.serve(async (req: Request) => {
         .gte('created_at', round.revenue_window_start)
         .lte('created_at', revenueWindowEnd);
       refreshedRevenueWld = (revenueRows || []).reduce((sum: number, r: OilPurchase) => sum + Number(r.amount_wld || 0), 0);
-    }
-
-    // If manual is set, use it. Else calculate from config.
-    let targetPool = 0;
-    if (manual_pool_wld !== undefined && manual_pool_wld !== null) {
-      targetPool = Number(manual_pool_wld);
-    } else {
-      const config = await getGameConfig();
-      targetPool = refreshedRevenueWld * Number(config.treasury?.payout_percentage || 0);
     }
 
     const { data: refreshedRound, error: refreshedRoundError } = await admin
