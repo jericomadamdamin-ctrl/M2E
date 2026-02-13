@@ -25,7 +25,7 @@ export const AdminFinancials = ({ stats, accessKey, onRefresh }: AdminFinancials
     const [loadingPending, setLoadingPending] = useState(false);
     const [verifyingAll, setVerifyingAll] = useState(false);
     const [processingId, setProcessingId] = useState<string | null>(null);
-    const [manualPool, setManualPool] = useState<string>('');
+    const [manualPools, setManualPools] = useState<Record<string, string>>({});
     const [editRoundId, setEditRoundId] = useState<string | null>(null);
     const [editPoolValue, setEditPoolValue] = useState<string>('');
     const [verifyId, setVerifyId] = useState<string | null>(null);
@@ -153,7 +153,7 @@ export const AdminFinancials = ({ stats, accessKey, onRefresh }: AdminFinancials
     };
 
     const handleProcessRound = async (roundId: string) => {
-        const poolOverride = manualPool ? parseFloat(manualPool) : undefined;
+        const poolOverride = manualPools[roundId] ? parseFloat(manualPools[roundId]) : undefined;
         const msg = poolOverride
             ? `Close round with MANUAL POOL of ${poolOverride} WLD? Standard revenue logic will be bypassed.`
             : 'Are you sure you want to CLOSE this round and calculate payouts? This cannot be undone.';
@@ -167,7 +167,11 @@ export const AdminFinancials = ({ stats, accessKey, onRefresh }: AdminFinancials
                 description: `Calculated payouts for ${result.total_diamonds} diamonds. Pool: ${result.payout_pool} WLD.`,
                 className: 'glow-green',
             });
-            setManualPool('');
+            setManualPools(prev => {
+                const next = { ...prev };
+                delete next[roundId];
+                return next;
+            });
             onRefresh();
         } catch (err: any) {
             toast({
@@ -365,8 +369,8 @@ export const AdminFinancials = ({ stats, accessKey, onRefresh }: AdminFinancials
                                                     placeholder="Override Pool (Optional)"
                                                     className="bg-black/40 border-white/10 h-9 font-mono text-xs"
                                                     type="number"
-                                                    value={manualPool}
-                                                    onChange={(e) => setManualPool(e.target.value)}
+                                                    value={manualPools[round.id] || ''}
+                                                    onChange={(e) => setManualPools(prev => ({ ...prev, [round.id]: e.target.value }))}
                                                 />
                                             </div>
                                             <Button
