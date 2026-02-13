@@ -149,31 +149,36 @@ Deno.serve(async (req) => {
       round = refreshedRound;
     }
 
-    // Burn diamonds on request
-    const newDiamondBalance = currentDiamonds - requestedDiamonds;
+    // Atomic RPC Call (Replaces manual decrement + insert to prevent double-spend)
+    const { data: rpcResult, error: rpcError } = await admin.rpc('submit_cashout_request', {
+      p_user_id: userId,
+      p_diamonds: requestedDiamonds,
+      p_round_id: round.id
+    });
 
-    const { data: requestRow, error } = await admin
-      .from('cashout_requests')
-      .insert({
-        user_id: userId,
-        diamonds_submitted: requestedDiamonds,
-        payout_round_id: round.id,
-        status: 'pending',
-      })
-      .select('*')
-      .single();
+    if (rpcError) throw rpcError;
 
-    if (error || !requestRow) throw new Error('Failed to create cashout request');
+    const result = rpcResult as any;
+    if (!result.ok) {
+      throw new Error(result.message || 'Cashout request failed');
+    }
 
-    await admin
-      .from('player_state')
-      .update({ diamond_balance: newDiamondBalance })
-      .eq('user_id', userId);
+    const { request_id, new_balance } = result;
 
-    await admin
-      .from('cashout_rounds')
-      .update({ total_diamonds: Number(round.total_diamonds || 0) + requestedDiamonds })
-      .eq('id', round.id);
+    // Construct response object to match previous shape if needed by frontend, 
+    // or just return success.
+    // The frontend likely expects the request object.
+    const requestRow = {
+      id: request_id,
+      user_id: userId,
+      diamonds_submitted: requestedDiamonds,
+      payout_round_id: round.id,
+      status: 'pending',
+      requested_at: new Date().toISOString()
+    };
+
+    // We already updated round totals in RPC.
+    round.total_diamonds = Number(round.total_diamonds || 0) + requestedDiamonds;
 
     // Log successful cashout request
     logSecurityEvent({
