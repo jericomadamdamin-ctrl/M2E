@@ -575,6 +575,15 @@ export const AdminFinancials = ({ stats, accessKey, onRefresh }: AdminFinancials
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+            {/* Confirmation Dialog */}
+            <ConfirmDialog
+                open={confirmOpen}
+                onOpenChange={setConfirmOpen}
+                title={confirmConfig.title}
+                description={confirmConfig.description}
+                onConfirm={confirmConfig.onConfirm}
+                variant={confirmConfig.variant}
+            />
         </>
     );
 };
@@ -628,15 +637,6 @@ const PendingSection = ({ icon, label, items, type, page, onPageChange, onVerify
                     />
                 </>
             )}
-            {/* Confirmation Dialog */}
-            <ConfirmDialog
-                open={confirmOpen}
-                onOpenChange={setConfirmOpen}
-                title={confirmConfig.title}
-                description={confirmConfig.description}
-                onConfirm={confirmConfig.onConfirm}
-                variant={confirmConfig.variant}
-            />
         </div>
     );
 };
