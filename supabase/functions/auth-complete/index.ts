@@ -56,6 +56,10 @@ Deno.serve(async (req) => {
       throw new Error('Missing message or signature in payload');
     }
 
+    console.log(`[AuthComplete] Received auth request for nonce: ${nonce}`);
+    console.log(`[AuthComplete] Message: ${message.substring(0, 50)}...`);
+    console.log(`[AuthComplete] Payload Address: ${payloadAddress}`);
+
     let walletAddress: string | undefined;
 
     try {
@@ -64,27 +68,59 @@ Deno.serve(async (req) => {
 
       // Verify the nonce matches
       if (siweMessage.nonce !== nonce) {
+        console.error(`[AuthComplete] Nonce mismatch. Expected: ${nonce}, Received: ${siweMessage.nonce}`);
         throw new Error('Nonce mismatch');
       }
 
-      // Verify the signature using ethers
-      const recoveredAddress = verifyMessage(message, signature);
+      console.log(`[AuthComplete] SIWE address: ${siweMessage.address}`);
 
-      // Check address matches
-      if (recoveredAddress.toLowerCase() !== siweMessage.address.toLowerCase()) {
-        throw new Error('Signature verification failed');
+      // Verify the signature using the built-in SiweMessage verify method
+      // This is more robust as it handles all SIWE requirements
+      try {
+        const { success, error, data } = await siweMessage.verify({
+          signature,
+          nonce,
+        });
+
+        if (success) {
+          console.log(`[AuthComplete] SIWE Verification Success for address: ${data.address}`);
+          walletAddress = data.address;
+        } else {
+          console.error(`[AuthComplete] SIWE Verification Failed: ${error}`);
+          // Fall through to manual check as fallback
+        }
+      } catch (e) {
+        console.error(`[AuthComplete] siweMessage.verify error:`, e);
       }
 
-      walletAddress = siweMessage.address;
+      if (!walletAddress) {
+        // Double check with ethers directly as extra fallback
+        const recoveredAddress = verifyMessage(message, signature);
+        console.log(`[AuthComplete] Manual recovery (ethers): ${recoveredAddress}`);
+
+        if (recoveredAddress.toLowerCase() === siweMessage.address.toLowerCase()) {
+          console.log(`[AuthComplete] Manual recovery matched SIWE address.`);
+          walletAddress = siweMessage.address;
+        } else {
+          console.error(`[AuthComplete] Manual recovery mismatch: ${recoveredAddress.toLowerCase()} vs ${siweMessage.address.toLowerCase()}`);
+          throw new Error('Signature verification failed');
+        }
+      }
     } catch (e) {
+      console.error(`[AuthComplete] Primary SIWE path failed:`, e);
       // Fallback path for non-standard SIWE payloads:
       // still require signature recovery + nonce presence to avoid trusting raw payload address.
       if (payloadAddress) {
+        console.log(`[AuthComplete] Attempting fallback for payloadAddress: ${payloadAddress}`);
         const recoveredAddress = verifyMessage(message, signature);
+        console.log(`[AuthComplete] Recovered from fallback: ${recoveredAddress}`);
+
         if (recoveredAddress.toLowerCase() !== payloadAddress.toLowerCase()) {
+          console.error(`[AuthComplete] Fallback mismatch: ${recoveredAddress.toLowerCase()} vs ${payloadAddress.toLowerCase()}`);
           throw new Error('Signature/address mismatch');
         }
         if (!message.includes(nonce)) {
+          console.error(`[AuthComplete] Nonce not found in fallback message`);
           throw new Error('Nonce mismatch');
         }
         walletAddress = recoveredAddress;

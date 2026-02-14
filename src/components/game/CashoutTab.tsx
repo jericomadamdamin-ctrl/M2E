@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { requestCashout } from '@/lib/backend';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 interface CashoutTabProps {
   diamonds: number;
@@ -56,16 +57,18 @@ const CashoutTimer = ({ lastCashout, cooldownDays }: { lastCashout?: string, coo
 export const CashoutTab = ({ diamonds, minRequired, cooldownDays, lastCashout }: CashoutTabProps) => {
   const [amount, setAmount] = useState<number>(minRequired);
   const [loading, setLoading] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const { toast } = useToast();
 
   const canRequest = diamonds >= minRequired && amount > 0 && amount <= diamonds;
 
-  const handleSubmit = async () => {
+  const handleSubmitRaw = () => {
     if (!canRequest) return;
-    const proceed = window.confirm(
-      'Payout is variable and depends on round revenue and total submitted diamonds. Continue?'
-    );
-    if (!proceed) return;
+    setShowConfirm(true);
+  };
+
+  const handleConfirm = async () => {
+    setShowConfirm(false);
     setLoading(true);
     try {
       await requestCashout(amount);
@@ -124,10 +127,18 @@ export const CashoutTab = ({ diamonds, minRequired, cooldownDays, lastCashout }:
         <Button
           className="w-full glow-green"
           disabled={!canRequest || loading}
-          onClick={handleSubmit}
+          onClick={handleSubmitRaw}
         >
           {loading ? 'Submitting...' : 'Submit Cashout Request'}
         </Button>
+
+        <ConfirmDialog
+          open={showConfirm}
+          onOpenChange={setShowConfirm}
+          title="Confirm Cashout"
+          description="Payout is variable and depends on round revenue and total submitted diamonds. Continue?"
+          onConfirm={handleConfirm}
+        />
         {!canRequest && (
           <p className="text-xs text-muted-foreground">
             You need at least {minRequired} diamonds to request a cashout.
