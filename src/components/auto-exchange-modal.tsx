@@ -8,17 +8,14 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAutoExchange } from "@/hooks/useAutoExchange";
 
 interface AutoExchangeModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   playerDiamonds: number;
   currentWldPrice: number;
-  onExchangeSubmit: (
-    diamondAmount: number,
-    minWldAmount: number,
-    walletAddress: string
-  ) => Promise<void>;
+  onExchangeComplete?: (requestId: string) => void;
 }
 
 export function AutoExchangeModal({
@@ -26,14 +23,14 @@ export function AutoExchangeModal({
   onOpenChange,
   playerDiamonds,
   currentWldPrice,
-  onExchangeSubmit,
+  onExchangeComplete,
 }: AutoExchangeModalProps) {
   const { toast } = useToast();
+  const { requestExchange, loading: isExchangeLoading } = useAutoExchange();
   const [diamondAmount, setDiamondAmount] = useState("");
   const [minWldAmount, setMinWldAmount] = useState("");
-  const [walletAddress, setWalletAddress] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [slippage, setSlippage] = useState(2); // 2% default slippage
+  const [slippage, setSlippage] = useState(1); // 1% default slippage (within 0.1%-5% range)
   const [step, setStep] = useState<"input" | "confirm" | "success">("input");
 
   const handleDiamondAmountChange = (value: string) => {
@@ -73,7 +70,6 @@ export function AutoExchangeModal({
     if (step === "input") {
       // Validate inputs
       const diamonds = parseFloat(diamondAmount);
-      const minWld = parseFloat(minWldAmount);
 
       if (!diamondAmount || isNaN(diamonds)) {
         toast({
@@ -93,28 +89,19 @@ export function AutoExchangeModal({
         return;
       }
 
-      if (diamonds < 1) {
+      if (diamonds < 1 || diamonds > 1000000) {
         toast({
-          title: "Minimum Amount",
-          description: "Minimum exchange is 1 diamond",
+          title: "Invalid Amount",
+          description: "Diamond amount must be between 1 and 1,000,000",
           variant: "destructive",
         });
         return;
       }
 
-      if (!walletAddress || walletAddress.trim().length === 0) {
+      if (slippage < 0.1 || slippage > 5) {
         toast({
-          title: "Wallet Address Required",
-          description: "Please enter your WLD wallet address",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      if (!walletAddress.match(/^0x[a-fA-F0-9]{40}$/)) {
-        toast({
-          title: "Invalid Wallet Address",
-          description: "Please enter a valid Ethereum address (0x...)",
+          title: "Invalid Slippage",
+          description: "Slippage tolerance must be between 0.1% and 5%",
           variant: "destructive",
         });
         return;
@@ -127,20 +114,25 @@ export function AutoExchangeModal({
     if (step === "confirm") {
       setIsLoading(true);
       try {
-        await onExchangeSubmit(
-          parseFloat(diamondAmount),
-          parseFloat(minWldAmount),
-          walletAddress
-        );
+        const result = await requestExchange(parseFloat(diamondAmount), slippage);
         setStep("success");
+        
+        // Callback to parent component
+        if (onExchangeComplete) {
+          onExchangeComplete(result.request_id);
+        }
+
+        toast({
+          title: "Exchange Initiated",
+          description: `Successfully requested exchange of ${diamondAmount} diamonds`,
+        });
         
         // Reset form after a delay
         setTimeout(() => {
           setStep("input");
           setDiamondAmount("");
           setMinWldAmount("");
-          setWalletAddress("");
-          setSlippage(2);
+          setSlippage(1);
           onOpenChange(false);
         }, 3000);
       } catch (error) {
@@ -212,13 +204,13 @@ export function AutoExchangeModal({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="slippage">Slippage Tolerance (%)</Label>
+              <Label htmlFor="slippage">Slippage Tolerance (%) - {slippage.toFixed(1)}%</Label>
               <div className="flex gap-2">
                 <Input
                   id="slippage"
                   type="number"
-                  min="0.01"
-                  max="50"
+                  min="0.1"
+                  max="5"
                   step="0.1"
                   value={slippage}
                   onChange={(e) => handleSlippageChange(e.target.value)}
@@ -226,7 +218,16 @@ export function AutoExchangeModal({
                 />
                 <Button
                   type="button"
-                  variant="outline"
+                  variant={slippage === 0.5 ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => handleSlippageChange("0.5")}
+                  disabled={isLoading}
+                >
+                  0.5%
+                </Button>
+                <Button
+                  type="button"
+                  variant={slippage === 1 ? "default" : "outline"}
                   size="sm"
                   onClick={() => handleSlippageChange("1")}
                   disabled={isLoading}
@@ -235,37 +236,16 @@ export function AutoExchangeModal({
                 </Button>
                 <Button
                   type="button"
-                  variant="outline"
+                  variant={slippage === 2 ? "default" : "outline"}
                   size="sm"
                   onClick={() => handleSlippageChange("2")}
                   disabled={isLoading}
                 >
                   2%
                 </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleSlippageChange("5")}
-                  disabled={isLoading}
-                >
-                  5%
-                </Button>
               </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="wallet">WLD Wallet Address</Label>
-              <Input
-                id="wallet"
-                type="text"
-                placeholder="0x..."
-                value={walletAddress}
-                onChange={(e) => setWalletAddress(e.target.value)}
-                disabled={isLoading}
-              />
               <p className="text-xs text-muted-foreground">
-                Your WLD tokens will be sent to this address
+                Lower = better rate but higher risk of failure. Range: 0.1% - 5%
               </p>
             </div>
 
@@ -297,10 +277,7 @@ export function AutoExchangeModal({
                 <span className="text-sm text-muted-foreground">Minimum WLD:</span>
                 <span className="font-semibold text-blue-600">{minWldAmount}</span>
               </div>
-              <div className="flex justify-between border-b pb-2">
-                <span className="text-sm text-muted-foreground">Slippage:</span>
-                <span className="font-semibold">{slippage}%</span>
-              </div>
+
               <div className="flex justify-between">
                 <span className="text-sm text-muted-foreground">Wallet:</span>
                 <span className="font-mono text-xs">

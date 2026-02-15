@@ -38,3 +38,15 @@ verify_jwt = false
 
 [functions.oil-purchase]
 verify_jwt = false
+
+[functions.auto-exchange-request]
+verify_jwt = false
+
+[functions.auto-exchange-execute]
+verify_jwt = false
+
+[functions.auto-exchange-status]
+verify_jwt = false
+
+[functions.auto-exchange-config]
+verify_jwt = false

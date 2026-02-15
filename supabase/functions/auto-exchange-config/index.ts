@@ -1,277 +1,125 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { corsHeaders } from "../_shared/cors.ts";
-
-interface ConfigPayload {
-  worldId: string;
-  enabled?: boolean;
-  maxDailyExchange?: number;
-  autoApproveThreshold?: number;
-}
+import { corsHeaders, handleOptions } from '../_shared/cors.ts';
+import { getAdminClient, requireUserId, requireHuman } from '../_shared/supabase.ts';
+import { logSecurityEvent, extractClientInfo } from '../_shared/security.ts';
 
 /**
  * Manage user auto-exchange configuration
+ * GET: Retrieve current config
+ * POST/PUT: Update config
  */
-export async function handleConfig(req: Request): Promise<Response> {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
+Deno.serve(async (req) => {
+  const preflight = handleOptions(req);
+  if (preflight) return preflight;
 
-  if (req.method === "GET") {
-    return await getConfig(req);
-  } else if (req.method === "PUT" || req.method === "POST") {
-    return await updateConfig(req);
-  } else {
-    return new Response(JSON.stringify({ error: "Method not allowed" }), {
-      status: 405,
-      headers: corsHeaders,
-    });
-  }
-}
-
-/**
- * Get user's auto-exchange configuration
- */
-async function getConfig(req: Request): Promise<Response> {
   try {
-    const url = new URL(req.url);
-    const worldId = url.searchParams.get("worldId");
+    const userId = await requireUserId(req);
+    await requireHuman(userId);
 
-    if (!worldId) {
+    const admin = getAdminClient();
+    const clientInfo = extractClientInfo(req);
+
+    if (req.method === 'GET') {
+      // Get current auto-exchange config
+      const { data: config, error } = await admin
+        .from('auto_exchange_config')
+        .select('*')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (error) {
+        throw new Error('Failed to fetch config');
+      }
+
       return new Response(
-        JSON.stringify({ error: "worldId is required" }),
-        { status: 400, headers: corsHeaders }
+        JSON.stringify({
+          ok: true,
+          config: config || {
+            user_id: userId,
+            enabled: false,
+            slippage_tolerance: 1.0,
+            min_wld_amount: 10,
+            auto_retry: true,
+          },
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
       );
-    }
+    } else if (req.method === 'POST' || req.method === 'PUT') {
+      // Update auto-exchange config
+      const { enabled, slippageTolerance, minWldAmount, autoRetry } = await req.json();
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+      // Validate inputs
+      if (typeof enabled !== 'boolean') {
+        throw new Error('enabled must be a boolean');
+      }
 
-    const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
+      if (slippageTolerance !== undefined) {
+        if (slippageTolerance < 0.1 || slippageTolerance > 5.0) {
+          throw new Error('Slippage tolerance must be between 0.1% and 5%');
+        }
+      }
 
-    // Get user
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("id")
-      .eq("world_id", worldId)
-      .single();
+      if (minWldAmount !== undefined && minWldAmount !== null) {
+        if (minWldAmount <= 0) {
+          throw new Error('Min WLD amount must be positive');
+        }
+      }
 
-    if (userError || !userData) {
-      return new Response(JSON.stringify({ error: "User not found" }), {
-        status: 404,
-        headers: corsHeaders,
-      });
-    }
-
-    // Get config
-    const { data: configData, error: configError } = await supabase
-      .from("auto_exchange_config")
-      .select("*")
-      .eq("user_id", userData.id)
-      .single();
-
-    if (configError && configError.code !== "PGRST116") {
-      console.error("Config fetch error:", configError);
-      return new Response(
-        JSON.stringify({ error: "Failed to fetch config" }),
-        { status: 500, headers: corsHeaders }
-      );
-    }
-
-    // Return default config if none exists
-    if (!configData) {
-      const defaultConfig = {
-        user_id: userData.id,
-        enabled: true,
-        max_daily_exchange: 10000,
-        auto_approve_threshold: 1000,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-
-      return new Response(JSON.stringify({ success: true, config: defaultConfig }), {
-        status: 200,
-        headers: corsHeaders,
-      });
-    }
-
-    return new Response(
-      JSON.stringify({ success: true, config: configData }),
-      { status: 200, headers: corsHeaders }
-    );
-  } catch (error) {
-    console.error("Get config error:", error);
-    return new Response(
-      JSON.stringify({ error: "Internal server error" }),
-      { status: 500, headers: corsHeaders }
-    );
-  }
-}
-
-/**
- * Update user's auto-exchange configuration
- */
-async function updateConfig(req: Request): Promise<Response> {
-  try {
-    const payload: ConfigPayload = await req.json();
-
-    if (!payload.worldId) {
-      return new Response(
-        JSON.stringify({ error: "worldId is required" }),
-        { status: 400, headers: corsHeaders }
-      );
-    }
-
-    // Validate amounts
-    if (payload.maxDailyExchange !== undefined && payload.maxDailyExchange <= 0) {
-      return new Response(
-        JSON.stringify({ error: "maxDailyExchange must be positive" }),
-        { status: 400, headers: corsHeaders }
-      );
-    }
-
-    if (
-      payload.autoApproveThreshold !== undefined &&
-      payload.autoApproveThreshold < 0
-    ) {
-      return new Response(
-        JSON.stringify({ error: "autoApproveThreshold cannot be negative" }),
-        { status: 400, headers: corsHeaders }
-      );
-    }
-
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-
-    const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
-
-    // Get user
-    const { data: userData, error: userError } = await supabase
-      .from("users")
-      .select("id")
-      .eq("world_id", payload.worldId)
-      .single();
-
-    if (userError || !userData) {
-      return new Response(JSON.stringify({ error: "User not found" }), {
-        status: 404,
-        headers: corsHeaders,
-      });
-    }
-
-    const userId = userData.id;
-
-    // Get existing config
-    const { data: existingConfig } = await supabase
-      .from("auto_exchange_config")
-      .select("*")
-      .eq("user_id", userId)
-      .single();
-
-    // Prepare update data
-    const updateData: Record<string, unknown> = {
-      updated_at: new Date().toISOString(),
-    };
-
-    if (payload.enabled !== undefined) {
-      updateData.enabled = payload.enabled;
-    }
-
-    if (payload.maxDailyExchange !== undefined) {
-      updateData.max_daily_exchange = payload.maxDailyExchange;
-    }
-
-    if (payload.autoApproveThreshold !== undefined) {
-      updateData.auto_approve_threshold = payload.autoApproveThreshold;
-    }
-
-    if (existingConfig) {
-      // Update existing config
-      const { data: updatedConfig, error: updateError } = await supabase
-        .from("auto_exchange_config")
-        .update(updateData)
-        .eq("user_id", userId)
+      // Upsert config
+      const { data: config, error: upsertError } = await admin
+        .from('auto_exchange_config')
+        .upsert({
+          user_id: userId,
+          enabled,
+          slippage_tolerance: slippageTolerance ?? 1.0,
+          min_wld_amount: minWldAmount ?? 10,
+          auto_retry: autoRetry !== false,
+          updated_at: new Date().toISOString(),
+        })
         .select()
         .single();
 
-      if (updateError) {
-        console.error("Config update error:", updateError);
-        return new Response(
-          JSON.stringify({ error: "Failed to update config" }),
-          { status: 500, headers: corsHeaders }
-        );
+      if (upsertError) {
+        throw new Error('Failed to update config');
       }
 
-      // Log audit
-      await supabase.from("exchange_audit_log").insert({
+      // Log security event
+      await logSecurityEvent({
         user_id: userId,
-        order_id: `config_${userId}`,
-        action: "config_updated",
-        diamonds_amount: 0,
-        min_wld_amount: 0,
-        status: "success",
-        metadata: updateData,
+        action: 'auto_exchange_config_updated',
+        details: {
+          enabled,
+          slippage_tolerance: slippageTolerance ?? 1.0,
+          auto_retry: autoRetry !== false,
+        },
+        ip_address: clientInfo.ip,
+        user_agent: clientInfo.userAgent,
       });
 
       return new Response(
         JSON.stringify({
-          success: true,
-          message: "Configuration updated successfully",
-          config: updatedConfig,
+          ok: true,
+          message: 'Config updated successfully',
+          config,
         }),
-        { status: 200, headers: corsHeaders }
+        {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
       );
     } else {
-      // Create new config
-      const newConfig = {
-        user_id: userId,
-        enabled: payload.enabled ?? true,
-        max_daily_exchange: payload.maxDailyExchange ?? 10000,
-        auto_approve_threshold: payload.autoApproveThreshold ?? 1000,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-
-      const { data: createdConfig, error: createError } = await supabase
-        .from("auto_exchange_config")
-        .insert(newConfig)
-        .select()
-        .single();
-
-      if (createError) {
-        console.error("Config creation error:", createError);
-        return new Response(
-          JSON.stringify({ error: "Failed to create config" }),
-          { status: 500, headers: corsHeaders }
-        );
-      }
-
-      // Log audit
-      await supabase.from("exchange_audit_log").insert({
-        user_id: userId,
-        order_id: `config_${userId}`,
-        action: "config_created",
-        diamonds_amount: 0,
-        min_wld_amount: 0,
-        status: "success",
-        metadata: newConfig,
-      });
-
-      return new Response(
-        JSON.stringify({
-          success: true,
-          message: "Configuration created successfully",
-          config: createdConfig,
-        }),
-        { status: 201, headers: corsHeaders }
-      );
+      throw new Error('Method not allowed');
     }
   } catch (error) {
-    console.error("Update config error:", error);
+    console.error('[v0] Auto-exchange config error:', error.message);
     return new Response(
-      JSON.stringify({ error: "Internal server error" }),
-      { status: 500, headers: corsHeaders }
+      JSON.stringify({ error: error.message }),
+      {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
     );
   }
-}
-
-Deno.serve(handleConfig);
+});

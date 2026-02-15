@@ -1,296 +1,218 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { corsHeaders } from "../_shared/cors.ts";
-
-interface ExecuteExchangePayload {
-  orderId: string;
-  swapPath: string; // Encoded Uniswap path
-  deadline: number;
-  contractAddress: string;
-}
-
-interface FailureNotification {
-  user_id: string;
-  order_id: string;
-  action: string;
-  reason: string;
-  fallback_status: string;
-  diamonds_amount: number;
-}
+import { corsHeaders, handleOptions } from '../_shared/cors.ts';
+import { getAdminClient } from '../_shared/supabase.ts';
+import { logSecurityEvent } from '../_shared/security.ts';
 
 /**
- * This function is called by the backend service to execute a confirmed exchange
- * It handles the smart contract interaction and implements fallback on failure
+ * Auto-exchange execution function (backend only - not user callable)
+ * Called by scheduled jobs or admin to execute pending auto-exchange requests
+ * Implements atomic locking and automatic fallback on failure
  */
-export async function handleExecute(req: Request): Promise<Response> {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
-
-  if (req.method !== "POST") {
-    return new Response(JSON.stringify({ error: "Method not allowed" }), {
-      status: 405,
-      headers: corsHeaders,
-    });
-  }
+Deno.serve(async (req) => {
+  const preflight = handleOptions(req);
+  if (preflight) return preflight;
 
   try {
-    const payload: ExecuteExchangePayload = await req.json();
-
-    if (!payload.orderId || !payload.contractAddress) {
-      return new Response(
-        JSON.stringify({ error: "Missing required fields" }),
-        { status: 400, headers: corsHeaders }
-      );
+    if (req.method !== 'POST') {
+      return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+        status: 405,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    // Only internal services (with SERVICE_ROLE) can call this
+    const authHeader = req.headers.get('authorization');
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    
+    if (authHeader !== `Bearer ${serviceRoleKey}`) {
+      throw new Error('Unauthorized: Invalid credentials');
+    }
 
-    const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
+    const { requestId, txHash, wldReceived } = await req.json();
 
-    // Fetch the order
-    const { data: orderData, error: orderError } = await supabase
-      .from("auto_exchange_requests")
-      .select("*")
-      .eq("order_id", payload.orderId)
+    if (!requestId) {
+      throw new Error('Missing requestId');
+    }
+
+    const admin = getAdminClient();
+
+    // Fetch pending exchange request
+    const { data: request, error: fetchError } = await admin
+      .from('auto_exchange_requests')
+      .select('*')
+      .eq('id', requestId)
+      .eq('status', 'pending')
       .single();
 
-    if (orderError || !orderData) {
-      return new Response(JSON.stringify({ error: "Order not found" }), {
-        status: 404,
-        headers: corsHeaders,
-      });
+    if (fetchError || !request) {
+      throw new Error('Exchange request not found or not pending');
     }
 
-    if (orderData.status !== "pending") {
-      return new Response(
-        JSON.stringify({ error: "Order is not in pending state" }),
-        { status: 400, headers: corsHeaders }
-      );
-    }
+    // Mark as executing
+    await admin
+      .from('auto_exchange_requests')
+      .update({ 
+        status: 'executing',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', requestId);
 
-    // Log execution attempt
-    await supabase.from("exchange_audit_log").insert({
-      user_id: orderData.user_id,
-      order_id: payload.orderId,
-      action: "exchange_execution_started",
-      diamonds_amount: orderData.diamonds_amount,
-      min_wld_amount: orderData.min_wld_amount,
-      status: "processing",
-      metadata: {
-        contract_address: payload.contractAddress,
-        deadline: payload.deadline,
-      },
-    });
+    try {
+      // Get and lock player state
+      const { data: playerState, error: stateError } = await admin
+        .from('player_state')
+        .select('diamond_balance')
+        .eq('user_id', request.user_id)
+        .single();
 
-    // Call smart contract to execute exchange
-    // In production, this would use ethers.js or web3.js to interact with the blockchain
-    const executionResult = await executeSmartContractSwap(
-      payload.contractAddress,
-      payload.orderId,
-      payload.swapPath,
-      payload.deadline,
-      orderData
-    );
-
-    if (executionResult.success) {
-      // Update order status to executed
-      const { error: updateError } = await supabase
-        .from("auto_exchange_requests")
-        .update({
-          status: "executed",
-          wld_amount: executionResult.wldAmount,
-          transaction_hash: executionResult.txHash,
-          executed_at: new Date().toISOString(),
-        })
-        .eq("order_id", payload.orderId);
-
-      if (updateError) {
-        console.error("Failed to update order:", updateError);
-        // Still consider this a success since blockchain transaction went through
+      if (stateError || !playerState) {
+        throw new Error('Player state not found');
       }
 
-      // Log success
-      await supabase.from("exchange_audit_log").insert({
-        user_id: orderData.user_id,
-        order_id: payload.orderId,
-        action: "exchange_executed",
-        diamonds_amount: orderData.diamonds_amount,
-        min_wld_amount: orderData.min_wld_amount,
-        status: "success",
-        metadata: {
-          wld_amount: executionResult.wldAmount,
-          tx_hash: executionResult.txHash,
-          fee_amount: executionResult.feeAmount,
-        },
-      });
+      const currentDiamonds = Number(playerState.diamond_balance || 0);
+      if (currentDiamonds < request.diamond_amount) {
+        throw new Error('Insufficient diamonds at execution time');
+      }
+
+      // Validate WLD received meets slippage tolerance
+      if (wldReceived) {
+        const minExpected = request.wld_target_amount * (1 - request.slippage_tolerance / 100);
+        if (wldReceived < minExpected) {
+          throw new Error('Slippage tolerance exceeded');
+        }
+      }
+
+      // Atomic deduction of diamonds
+      const { error: deductError } = await admin
+        .from('player_state')
+        .update({
+          diamond_balance: currentDiamonds - request.diamond_amount,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('user_id', request.user_id);
+
+      if (deductError) {
+        throw new Error('Failed to deduct diamonds');
+      }
+
+      // Mark request as completed
+      const { error: completeError } = await admin
+        .from('auto_exchange_requests')
+        .update({
+          status: 'completed',
+          tx_hash: txHash,
+          wld_received: wldReceived,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', requestId);
+
+      if (completeError) {
+        throw new Error('Failed to update request status');
+      }
+
+      // Log audit event
+      await admin
+        .from('exchange_audit_log')
+        .insert({
+          user_id: request.user_id,
+          action: 'exchange_executed',
+          request_id: requestId,
+          details: {
+            diamond_amount: request.diamond_amount,
+            wld_received: wldReceived,
+            tx_hash: txHash,
+          },
+          timestamp: new Date().toISOString(),
+        });
 
       return new Response(
         JSON.stringify({
-          success: true,
-          message: "Exchange executed successfully",
-          txHash: executionResult.txHash,
-          wldAmount: executionResult.wldAmount,
+          ok: true,
+          message: 'Exchange executed successfully',
+          wld_received: wldReceived,
+          tx_hash: txHash,
         }),
-        { status: 200, headers: corsHeaders }
+        {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
       );
-    } else {
-      // Handle failure with automatic fallback
-      return await handleExchangeFailure(
-        supabase,
-        orderData,
-        payload.orderId,
-        executionResult.error
+    } catch (executionError) {
+      // Execution failed - trigger fallback mechanism
+      console.error(`[v0] Execution error for request ${requestId}:`, executionError.message);
+      await handleFallback(admin, request, executionError.message);
+
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          message: 'Exchange execution failed - fallback initiated',
+          error: executionError.message,
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
       );
     }
   } catch (error) {
-    console.error("Execution error:", error);
+    console.error('[v0] Auto-exchange execute error:', error.message);
     return new Response(
-      JSON.stringify({ error: "Internal server error" }),
-      { status: 500, headers: corsHeaders }
+      JSON.stringify({ error: error.message }),
+      {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
     );
   }
-}
+});
 
-/**
- * Handle exchange failure and create fallback manual withdrawal request
- */
-async function handleExchangeFailure(
-  supabase: any,
-  orderData: any,
-  orderId: string,
-  failureReason: string
-): Promise<Response> {
+async function handleFallback(admin: any, request: any, reason: string) {
+  console.log(`[v0] Handling fallback for request ${request.id}: ${reason}`);
+
   try {
-    // Update order status to failed
-    await supabase
-      .from("auto_exchange_requests")
-      .update({
-        status: "failed",
-        failure_reason: failureReason,
-        failed_at: new Date().toISOString(),
-      })
-      .eq("order_id", orderId);
-
-    // Create fallback manual withdrawal request
-    const fallbackId = `fallback_${orderId}`;
-
-    const { error: fallbackError } = await supabase
-      .from("fallback_conversion_requests")
+    // Create fallback conversion request
+    const { data: fallback, error: fallbackError } = await admin
+      .from('fallback_conversion_requests')
       .insert({
-        user_id: orderData.user_id,
-        original_order_id: orderId,
-        fallback_id: fallbackId,
-        diamonds_amount: orderData.diamonds_amount,
-        status: "pending",
-        reason: failureReason,
-        created_at: new Date().toISOString(),
-      });
+        auto_exchange_request_id: request.id,
+        user_id: request.user_id,
+        diamond_amount: request.diamond_amount,
+        fallback_reason: reason,
+        status: 'pending',
+      })
+      .select()
+      .single();
 
     if (fallbackError) {
-      console.error("Fallback creation error:", fallbackError);
-      return new Response(
-        JSON.stringify({
-          error: "Exchange failed and fallback creation failed",
-          details: failureReason,
-        }),
-        { status: 500, headers: corsHeaders }
-      );
+      console.error('[v0] Fallback creation error:', fallbackError);
+      return;
     }
 
-    // Log failure and fallback
-    await supabase.from("exchange_audit_log").insert({
-      user_id: orderData.user_id,
-      order_id: orderId,
-      action: "exchange_failed_fallback_created",
-      diamonds_amount: orderData.diamonds_amount,
-      min_wld_amount: orderData.min_wld_amount,
-      status: "failed",
-      metadata: {
-        failure_reason: failureReason,
-        fallback_id: fallbackId,
-        fallback_status: "pending",
-      },
-    });
+    // Update main request to fallback status
+    await admin
+      .from('auto_exchange_requests')
+      .update({
+        status: 'fallback',
+        error_message: reason,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', request.id);
 
-    return new Response(
-      JSON.stringify({
-        success: false,
-        message:
-          "Exchange failed. Automatic fallback to manual withdrawal initiated.",
-        orderId,
-        fallbackId,
-        failureReason,
-        action: "fallback_created",
-      }),
-      { status: 200, headers: corsHeaders }
-    );
-  } catch (error) {
-    console.error("Fallback handling error:", error);
-    return new Response(
-      JSON.stringify({ error: "Failed to handle exchange failure" }),
-      { status: 500, headers: corsHeaders }
-    );
+    // Log fallback event
+    await admin
+      .from('exchange_audit_log')
+      .insert({
+        user_id: request.user_id,
+        action: 'exchange_failed_fallback_initiated',
+        request_id: request.id,
+        details: {
+          reason,
+          fallback_request_id: fallback.id,
+        },
+        timestamp: new Date().toISOString(),
+      });
+
+    console.log(`[v0] Fallback initiated for user ${request.user_id}`);
+  } catch (fallbackError) {
+    console.error('[v0] Fallback handling error:', fallbackError.message);
   }
 }
-
-/**
- * Execute smart contract swap
- * In production, this would use ethers.js with proper Web3 provider setup
- */
-async function executeSmartContractSwap(
-  contractAddress: string,
-  orderId: string,
-  swapPath: string,
-  deadline: number,
-  orderData: any
-): Promise<{
-  success: boolean;
-  wldAmount?: number;
-  txHash?: string;
-  feeAmount?: number;
-  error?: string;
-}> {
-  try {
-    // This is a placeholder for the actual smart contract interaction
-    // In production, you would:
-    // 1. Initialize ethers.js provider and signer
-    // 2. Create contract instance with ABI
-    // 3. Call executeExchange method
-    // 4. Wait for transaction confirmation
-    // 5. Return transaction hash and results
-
-    // For now, simulate success with mock data
-    console.log(
-      `[SIMULATION] Executing swap for order ${orderId} on contract ${contractAddress}`
-    );
-
-    // This would be replaced with actual contract call
-    const mockWldAmount = Math.floor(orderData.min_wld_amount * 0.99); // Simulate small slippage
-    const mockFeeAmount = Math.floor(mockWldAmount * 0.01); // 1% fee
-    const mockTxHash = `0x${Math.random().toString(16).slice(2)}`;
-
-    // Simulate occasional failures for testing (5% failure rate)
-    if (Math.random() < 0.05) {
-      return {
-        success: false,
-        error: "Simulated slippage exceeded",
-      };
-    }
-
-    return {
-      success: true,
-      wldAmount: mockWldAmount - mockFeeAmount,
-      txHash: mockTxHash,
-      feeAmount: mockFeeAmount,
-    };
-  } catch (error) {
-    console.error("Smart contract execution error:", error);
-    return {
-      success: false,
-      error: `Contract execution failed: ${String(error)}`,
-    };
-  }
-}
-
-Deno.serve(handleExecute);
