@@ -437,3 +437,127 @@ export async function checkTreasuryBalance(requiredAmount: number): Promise<{ su
     };
   }
 }
+
+// Auto-Exchange Functions
+export async function requestAutoExchange(diamondAmount: number, slippageTolerance: number) {
+  const { data, error } = await supabase.functions.invoke('auto-exchange-request', {
+    headers: authHeaders(),
+    body: { diamondAmount, slippageTolerance },
+  });
+  if (error) await handleFunctionError(error);
+  if (isEdgeErrorPayload(data)) {
+    throw new Error(data.error);
+  }
+  return data as {
+    ok: boolean;
+    request_id: string;
+    diamond_amount: number;
+    wld_target_amount: number;
+    slippage_tolerance: number;
+    status: string;
+  };
+}
+
+export async function getAutoExchangeConfig() {
+  const { data, error } = await supabase.functions.invoke('auto-exchange-config', {
+    headers: authHeaders(),
+    method: 'GET',
+  });
+  if (error) await handleFunctionError(error);
+  if (isEdgeErrorPayload(data)) {
+    throw new Error(data.error);
+  }
+  return data as {
+    ok: boolean;
+    config: {
+      user_id: string;
+      enabled: boolean;
+      slippage_tolerance: number;
+      min_wld_amount: number;
+      auto_retry: boolean;
+    };
+  };
+}
+
+export async function updateAutoExchangeConfig(updates: {
+  enabled?: boolean;
+  slippageTolerance?: number;
+  minWldAmount?: number;
+  autoRetry?: boolean;
+}) {
+  const { data, error } = await supabase.functions.invoke('auto-exchange-config', {
+    headers: authHeaders(),
+    method: 'POST',
+    body: updates,
+  });
+  if (error) await handleFunctionError(error);
+  if (isEdgeErrorPayload(data)) {
+    throw new Error(data.error);
+  }
+  return data as {
+    ok: boolean;
+    message: string;
+    config: {
+      user_id: string;
+      enabled: boolean;
+      slippage_tolerance: number;
+      min_wld_amount: number;
+      auto_retry: boolean;
+    };
+  };
+}
+
+export async function getAutoExchangeStatus(requestId?: string, limit?: number, offset?: number) {
+  const params = new URLSearchParams();
+  if (requestId) params.append('requestId', requestId);
+  if (limit) params.append('limit', limit.toString());
+  if (offset) params.append('offset', offset.toString());
+
+  const { data, error } = await supabase.functions.invoke('auto-exchange-status', {
+    headers: authHeaders(),
+    method: 'GET',
+    body: params.toString() ? undefined : {},
+  } as Parameters<typeof supabase.functions.invoke>[1] & { body?: string });
+  
+  if (error) await handleFunctionError(error);
+  if (isEdgeErrorPayload(data)) {
+    throw new Error(data.error);
+  }
+  return data as {
+    ok: boolean;
+    request?: {
+      id: string;
+      diamond_amount: number;
+      wld_target_amount: number;
+      wld_received?: number;
+      status: string;
+      slippage_tolerance: number;
+      tx_hash?: string;
+      error_message?: string;
+      retry_count: number;
+      created_at: string;
+      updated_at: string;
+    };
+    requests?: Array<{
+      id: string;
+      diamond_amount: number;
+      wld_target_amount: number;
+      wld_received?: number;
+      status: string;
+      slippage_tolerance: number;
+      tx_hash?: string;
+      error_message?: string;
+      created_at: string;
+      updated_at: string;
+    }>;
+    total?: number;
+    limit?: number;
+    offset?: number;
+    fallback?: {
+      id: string;
+      fallback_reason: string;
+      status: string;
+      created_at: string;
+    };
+  };
+}
